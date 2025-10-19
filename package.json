@@ -2,7 +2,7 @@
   "name": "verbree-butchery-breakeven-analysis",
   "version": "0.1.0",
   "private": false,
-  "homepage": "https://YOUR_GITHUB_USERNAME.github.io/verbree-butchery-breakeven-analysis",
+  "homepage": "https://yannicksegaar.github.io/Verbree-Butchery-Breakeven-Analysis",
   "dependencies": {
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
