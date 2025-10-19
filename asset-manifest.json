@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/verbree-butchery-breakeven-analysis/static/css/main.5e41044a.css",
-    "main.js": "/verbree-butchery-breakeven-analysis/static/js/main.91cf0759.js",
-    "static/js/453.febb8f0f.chunk.js": "/verbree-butchery-breakeven-analysis/static/js/453.febb8f0f.chunk.js",
-    "index.html": "/verbree-butchery-breakeven-analysis/index.html",
-    "main.5e41044a.css.map": "/verbree-butchery-breakeven-analysis/static/css/main.5e41044a.css.map",
-    "main.91cf0759.js.map": "/verbree-butchery-breakeven-analysis/static/js/main.91cf0759.js.map",
-    "453.febb8f0f.chunk.js.map": "/verbree-butchery-breakeven-analysis/static/js/453.febb8f0f.chunk.js.map"
+    "main.css": "/Verbree-Butchery-Breakeven-Analysis/static/css/main.5e41044a.css",
+    "main.js": "/Verbree-Butchery-Breakeven-Analysis/static/js/main.255be3c1.js",
+    "static/js/453.febb8f0f.chunk.js": "/Verbree-Butchery-Breakeven-Analysis/static/js/453.febb8f0f.chunk.js",
+    "index.html": "/Verbree-Butchery-Breakeven-Analysis/index.html",
+    "main.5e41044a.css.map": "/Verbree-Butchery-Breakeven-Analysis/static/css/main.5e41044a.css.map",
+    "main.255be3c1.js.map": "/Verbree-Butchery-Breakeven-Analysis/static/js/main.255be3c1.js.map",
+    "453.febb8f0f.chunk.js.map": "/Verbree-Butchery-Breakeven-Analysis/static/js/453.febb8f0f.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.5e41044a.css",
-    "static/js/main.91cf0759.js"
+    "static/js/main.255be3c1.js"
   ]
 }
