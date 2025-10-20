@@ -1,19 +1,19 @@
 {
   "files": {
     "main.css": "/Verbree-Butchery-Breakeven-Analysis/static/css/main.5e41044a.css",
-    "main.js": "/Verbree-Butchery-Breakeven-Analysis/static/js/main.8e57e8ce.js",
+    "main.js": "/Verbree-Butchery-Breakeven-Analysis/static/js/main.38697ca6.js",
     "static/js/213.4ddb0769.chunk.js": "/Verbree-Butchery-Breakeven-Analysis/static/js/213.4ddb0769.chunk.js",
     "static/js/455.8815c3ba.chunk.js": "/Verbree-Butchery-Breakeven-Analysis/static/js/455.8815c3ba.chunk.js",
     "static/js/453.febb8f0f.chunk.js": "/Verbree-Butchery-Breakeven-Analysis/static/js/453.febb8f0f.chunk.js",
     "index.html": "/Verbree-Butchery-Breakeven-Analysis/index.html",
     "main.5e41044a.css.map": "/Verbree-Butchery-Breakeven-Analysis/static/css/main.5e41044a.css.map",
-    "main.8e57e8ce.js.map": "/Verbree-Butchery-Breakeven-Analysis/static/js/main.8e57e8ce.js.map",
+    "main.38697ca6.js.map": "/Verbree-Butchery-Breakeven-Analysis/static/js/main.38697ca6.js.map",
     "213.4ddb0769.chunk.js.map": "/Verbree-Butchery-Breakeven-Analysis/static/js/213.4ddb0769.chunk.js.map",
     "455.8815c3ba.chunk.js.map": "/Verbree-Butchery-Breakeven-Analysis/static/js/455.8815c3ba.chunk.js.map",
     "453.febb8f0f.chunk.js.map": "/Verbree-Butchery-Breakeven-Analysis/static/js/453.febb8f0f.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.5e41044a.css",
-    "static/js/main.8e57e8ce.js"
+    "static/js/main.38697ca6.js"
   ]
 }
