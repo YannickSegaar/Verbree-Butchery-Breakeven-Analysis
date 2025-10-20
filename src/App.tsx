@@ -1,5 +1,8 @@
-import React, { useState, useMemo, CSSProperties } from 'react';
+import React, { useState, useMemo, CSSProperties, useRef } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Scatter, ScatterChart, ZAxis } from 'recharts';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+
 
 interface Product {
   id: string;
@@ -330,6 +333,10 @@ const BreakEvenAnalysis: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'break-even' | 'startup' | 'monthly'>('break-even');
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const [hoveredEye, setHoveredEye] = useState<string | null>(null);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+
+  // Ref for the content to export
+  const contentRef = useRef<HTMLDivElement>(null);
 
   // Panel visibility states
   const [showBreakEvenStatus, setShowBreakEvenStatus] = useState(true);
@@ -795,12 +802,191 @@ const BreakEvenAnalysis: React.FC = () => {
     </div>
   );
 
+  // PDF Export Function
+  const exportToPDF = async () => {
+    if (!contentRef.current) return;
+    
+    setIsExportingPDF(true);
+    
+    try {
+      // Store original tab and show all tabs content
+      const originalTab = activeTab;
+      
+      // Create a temporary container for all content
+      const tempContainer = document.createElement('div');
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '0';
+      tempContainer.style.width = '1400px';
+      tempContainer.style.backgroundColor = '#fff';
+      document.body.appendChild(tempContainer);
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const margin = 10;
+      const contentWidth = pageWidth - (2 * margin);
+      let currentY = margin;
+      
+      // Add title page
+      pdf.setFontSize(24);
+      pdf.setTextColor(47, 62, 70); // #2F3E46
+      pdf.text('Verbree Butchery - Business Analysis', pageWidth / 2, 30, { align: 'center' });
+      
+      pdf.setFontSize(12);
+      pdf.setTextColor(40, 40, 40);
+      pdf.text('Break-even analysis and financial planning dashboard', pageWidth / 2, 40, { align: 'center' });
+      
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(`Generated on: ${new Date().toLocaleDateString('nl-NL')}`, pageWidth / 2, 50, { align: 'center' });
+      
+      currentY = 70;
+      
+      // Helper function to add section
+      const addSection = async (element: HTMLElement, title: string) => {
+        const canvas = await html2canvas(element, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = contentWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        
+        // Check if we need a new page
+        if (currentY + imgHeight > pageHeight - margin) {
+          pdf.addPage();
+          currentY = margin;
+        }
+        
+        // Add section title
+        if (title) {
+          pdf.setFontSize(14);
+          pdf.setTextColor(47, 62, 70);
+          pdf.text(title, margin, currentY);
+          currentY += 8;
+        }
+        
+        pdf.addImage(imgData, 'PNG', margin, currentY, imgWidth, imgHeight);
+        currentY += imgHeight + 10;
+      };
+      
+      // Temporarily show all panels
+      setShowBreakEvenStatus(true);
+      setShowProfitProjection(true);
+      setShowLaborCapacity(true);
+      setShowSeasonality(true);
+      setShowProductPerformance(true);
+      setShowProductEfficiency(true);
+      setShowMarginContribution(true);
+      setShowClassicVsPitmaster(true);
+      setShowSalesVolumeInput(true);
+      
+      // Wait for render
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Capture Break-Even Analysis tab
+      setActiveTab('break-even');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const sections = contentRef.current.querySelectorAll('[data-section]');
+      for (let i = 0; i < sections.length; i++) {
+        const section = sections[i] as HTMLElement;
+        const sectionTitle = section.getAttribute('data-section-title') || '';
+        await addSection(section, sectionTitle);
+      }
+      
+      // Capture Startup Costs tab
+      pdf.addPage();
+      currentY = margin;
+      pdf.setFontSize(18);
+      pdf.setTextColor(47, 62, 70);
+      pdf.text('Startup Costs', margin, currentY);
+      currentY += 15;
+      
+      setActiveTab('startup');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const startupSections = contentRef.current.querySelectorAll('[data-section]');
+      for (let i = 0; i < startupSections.length; i++) {
+        const section = startupSections[i] as HTMLElement;
+        await addSection(section, '');
+      }
+      
+      // Capture Monthly Operating Costs tab
+      pdf.addPage();
+      currentY = margin;
+      pdf.setFontSize(18);
+      pdf.setTextColor(47, 62, 70);
+      pdf.text('Monthly Operating Costs', margin, currentY);
+      currentY += 15;
+      
+      setActiveTab('monthly');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const monthlySections = contentRef.current.querySelectorAll('[data-section]');
+      for (let i = 0; i < monthlySections.length; i++) {
+        const section = monthlySections[i] as HTMLElement;
+        await addSection(section, '');
+      }
+      
+      // Clean up
+      document.body.removeChild(tempContainer);
+      
+      // Restore original tab
+      setActiveTab(originalTab);
+      
+      // Save PDF
+      pdf.save('Verbree-Butchery-Analysis.pdf');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('There was an error generating the PDF. Please try again.');
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <div style={styles.headerContent}>
-          <h1 style={styles.title}>Verbree Butchery - Business Analysis</h1>
-          <p style={styles.subtitle}>Break-even analysis and financial planning dashboard</p>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            <div>
+              <h1 style={styles.title}>Verbree Butchery - Business Analysis</h1>
+              <p style={styles.subtitle}>Break-even analysis and financial planning dashboard</p>
+            </div>
+            <button
+              onClick={exportToPDF}
+              disabled={isExportingPDF}
+              onMouseEnter={() => setHoveredButton('export-pdf')}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: hoveredButton === 'export-pdf' ? '#476963' : '#587C74',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: isExportingPDF ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s',
+                opacity: isExportingPDF ? 0.6 : 1
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              {isExportingPDF ? 'Generating PDF...' : 'Export to PDF'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -836,11 +1022,11 @@ const BreakEvenAnalysis: React.FC = () => {
         </div>
       </div>
 
-      <div style={styles.content}>
+      <div ref={contentRef} style={styles.content}>
         {activeTab === 'break-even' && (
           <div>
             {/* Top Metrics Panel - Added Startup Costs */}
-            <div style={styles.metricsGrid}>
+            <div data-section data-section-title="Financial Overview" style={styles.metricsGrid}>
               <div style={styles.metricCard}>
                 <div style={styles.metricLabel}>Monthly Revenue</div>
                 <div style={{...styles.metricValue, color: '#587C74'}}>
@@ -880,7 +1066,7 @@ const BreakEvenAnalysis: React.FC = () => {
             </div>
 
             {/* Break-Even Status Panel with Eye Icon */}
-            <div style={styles.card}>
+            <div data-section data-section-title="Break-Even Analysis" style={styles.card}>
               <div style={styles.cardHeader}>
                 <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
                   Break-Even Status
@@ -944,7 +1130,7 @@ const BreakEvenAnalysis: React.FC = () => {
             </div>
 
             {/* 24-Month Profit Projection Panel with Eye Icon - FIXED */}
-            <div style={styles.card}>
+            <div data-section data-section-title="24-Month Profit Projection" style={styles.card}>
               <div style={styles.cardHeader}>
                 <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
                   24-Month Profit Projection
@@ -1003,7 +1189,7 @@ const BreakEvenAnalysis: React.FC = () => {
             </div>
 
             {/* Labor Capacity Analysis Panel with Eye Icon */}
-            <div style={styles.card}>
+            <div data-section data-section-title="Labor Capacity Analysis" style={styles.card}>
               <div style={styles.cardHeader}>
                 <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
                   ⏱️ Labor Capacity Analysis (Kees Units)
@@ -1116,7 +1302,7 @@ const BreakEvenAnalysis: React.FC = () => {
             </div>
 
             {/* Seasonality & Annual Performance Panel with Eye Icon */}
-            <div style={styles.card}>
+            <div data-section data-section-title="Seasonality & Annual Performance" style={styles.card}>
               <div style={styles.cardHeader}>
                 <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
                   📅 Seasonality & Annual Performance
@@ -1235,9 +1421,12 @@ const BreakEvenAnalysis: React.FC = () => {
                       <Bar 
                         yAxisId="left"
                         dataKey="netProfit" 
-                        fill="#BB463C" 
                         name="Net Profit (€)"
-                      />
+                      >
+                        {monthlyData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.netProfit >= 0 ? '#587C74' : '#BB463C'} />
+                        ))}
+                      </Bar>
                       <Line 
                         yAxisId="right"
                         type="monotone" 
@@ -1398,7 +1587,7 @@ const BreakEvenAnalysis: React.FC = () => {
             </div>
 
             {/* Product Performance Comparison Panel with Eye Icon */}
-            <div style={styles.card}>
+            <div data-section data-section-title="Product Performance Comparison" style={styles.card}>
               <div style={styles.cardHeader}>
                 <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
                   🎯 Product Performance Comparison
@@ -1517,7 +1706,7 @@ const BreakEvenAnalysis: React.FC = () => {
             </div>
 
             {/* Product Efficiency Ranking Panel with Eye Icon */}
-            <div style={styles.card}>
+            <div data-section data-section-title="Product Efficiency Ranking" style={styles.card}>
               <div style={styles.cardHeader}>
                 <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
                   🏆 Product Efficiency Ranking (€/Minute)
@@ -1606,7 +1795,7 @@ const BreakEvenAnalysis: React.FC = () => {
             </div>
 
             {/* Top 10 Products by Margin Contribution Panel with Eye Icon */}
-            <div style={styles.card}>
+            <div data-section data-section-title="Top 10 Products by Margin" style={styles.card}>
               <div style={styles.cardHeader}>
                 <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
                   Top 10 Products by Margin Contribution
@@ -1645,7 +1834,7 @@ const BreakEvenAnalysis: React.FC = () => {
             </div>
 
             {/* Classic vs Pitmaster Performance Panel with Eye Icon */}
-            <div style={styles.card}>
+            <div data-section data-section-title="Classic vs Pitmaster Performance" style={styles.card}>
               <div style={styles.cardHeader}>
                 <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
                   📊 Classic vs Pitmaster Performance
@@ -1768,7 +1957,7 @@ const BreakEvenAnalysis: React.FC = () => {
             </div>
 
             {/* Monthly Sales Volume Input Panel with Eye Icon */}
-            <div style={styles.card}>
+            <div data-section data-section-title="Monthly Sales Volume Input" style={styles.card}>
               <div style={styles.cardHeader}>
                 <div style={{display: 'flex', alignItems: 'center'}}>
                   <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center', margin: 0}}>
@@ -2047,7 +2236,7 @@ const BreakEvenAnalysis: React.FC = () => {
 
         {activeTab === 'startup' && (
           <div>
-            <div style={styles.card}>
+            <div data-section style={styles.card}>
               <div style={styles.cardHeader}>
                 <div>
                   <h2 style={styles.cardTitle}>One-Time Startup Costs</h2>
@@ -2208,7 +2397,7 @@ const BreakEvenAnalysis: React.FC = () => {
 
         {activeTab === 'monthly' && (
           <div>
-            <div style={styles.card}>
+            <div data-section style={styles.card}>
               <div style={styles.cardHeader}>
                 <div>
                   <h2 style={styles.cardTitle}>Monthly Recurring Costs</h2>
