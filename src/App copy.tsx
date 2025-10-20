@@ -302,8 +302,9 @@ const styles = {
   } as CSSProperties,
   tooltip: {
     position: 'absolute' as const,
-    top: '25px',
-    right: '0',
+    bottom: '25px',
+    left: '50%',
+    transform: 'translateX(-50%)',
     backgroundColor: '#2F3E46',
     color: '#fff',
     padding: '12px 16px',
@@ -311,51 +312,20 @@ const styles = {
     fontSize: '13px',
     lineHeight: '1.5',
     width: '280px',
-    zIndex: 10000,
+    zIndex: 1000,
     boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-    pointerEvents: 'none' as const,
-    whiteSpace: 'normal' as const
+    pointerEvents: 'none' as const
   } as CSSProperties,
   tooltipArrow: {
     position: 'absolute' as const,
-    top: '-6px',
-    right: '10px',
+    bottom: '-6px',
+    left: '50%',
+    transform: 'translateX(-50%)',
     width: 0,
     height: 0,
     borderLeft: '6px solid transparent',
     borderRight: '6px solid transparent',
-    borderBottom: '6px solid #2F3E46'
-  } as CSSProperties,
-  productNameCell: {
-    position: 'relative' as const,
-    minWidth: '180px',
-    maxWidth: '180px'
-  } as CSSProperties,
-  productNameInput: {
-    width: '100%',
-    padding: '8px',
-    border: '1px solid #d4d4d4',
-    borderRadius: '4px',
-    fontSize: '14px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const
-  } as CSSProperties,
-  productNameTooltip: {
-    position: 'absolute' as const,
-    top: '100%',
-    left: '0',
-    marginTop: '4px',
-    backgroundColor: '#2F3E46',
-    color: '#fff',
-    padding: '8px 12px',
-    borderRadius: '6px',
-    fontSize: '13px',
-    zIndex: 1000,
-    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-    pointerEvents: 'none' as const,
-    whiteSpace: 'nowrap' as const,
-    maxWidth: '300px'
+    borderTop: '6px solid #2F3E46'
   } as CSSProperties
 };
 
@@ -387,7 +357,6 @@ const BreakEvenAnalysis: React.FC = () => {
 
   // Tooltip hover state
   const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null);
-  const [hoveredProductName, setHoveredProductName] = useState<string | null>(null);
 
   const [products, setProducts] = useState<Product[]>([
     {
@@ -471,47 +440,20 @@ const BreakEvenAnalysis: React.FC = () => {
   ]);
 
   const [startupCosts, setStartupCosts] = useState<StartupCost[]>([
-    { id: '1', category: 'Store Renovation', item: 'Store Renovation', estimatedCost: 0, actualCost: 30000, paid: false, notes: '' },
-    { id: '2', category: 'Equipment', item: 'BBQ Equipment', estimatedCost: 0, actualCost: 5000, paid: false, notes: '' },
-    { id: '3', category: 'Content Production', item: 'Camera, Mic, etc', estimatedCost: 0, actualCost: 2500, paid: false, notes: '' },
-    { id: '4', category: 'Branding & Packaging', item: 'Logo Design, packaging, jars, printi', estimatedCost: 0, actualCost: 2500, paid: false, notes: '' },
-    { id: '5', category: 'Legal & Admin', item: 'Insurance, legal stuff, LLC Setup', estimatedCost: 0, actualCost: 2000, paid: false, notes: '' },
-    { id: '6', category: 'Inventory', item: 'Initial Inventory', estimatedCost: 0, actualCost: 5000, paid: false, notes: '' },
-    { id: '7', category: 'Marketing & Software', item: 'Photography, website dev, social m', estimatedCost: 0, actualCost: 10000, paid: false, notes: '' },
-    { id: '8', category: 'Miscellaneous', item: 'Overige kosten', estimatedCost: 0, actualCost: 3000, paid: false, notes: '' }
+    { id: '1', category: 'Equipment', item: 'Smoker', estimatedCost: 5000, actualCost: 4800, paid: true, notes: 'Main cooking equipment' },
+    { id: '2', category: 'Equipment', item: 'Refrigeration', estimatedCost: 3000, actualCost: 2800, paid: true, notes: 'Walk-in cooler' },
+    { id: '3', category: 'Licensing', item: 'Business License', estimatedCost: 500, actualCost: 450, paid: true, notes: 'Annual renewal' },
+    { id: '4', category: 'Setup', item: 'Initial Inventory', estimatedCost: 2000, actualCost: 2200, paid: false, notes: 'First stock order' }
   ]);
 
   const [monthlyCosts, setMonthlyCosts] = useState<MonthlyCost[]>([
-    { id: '1', category: 'Occupancy', item: 'Rent', monthlyCost: 1500, annualCost: 18000, type: 'Fixed', notes: '' },
-    { id: '2', category: 'Occupancy', item: 'Utilities (electric, water)', monthlyCost: 500, annualCost: 6000, type: 'Fixed', notes: '' },
-    { id: '3', category: 'Occupancy', item: 'Internet & Phone', monthlyCost: 100, annualCost: 1200, type: 'Fixed', notes: '' },
-    { id: '4', category: 'Occupancy', item: 'Insurance', monthlyCost: 150, annualCost: 1800, type: 'Fixed', notes: '' },
-    { id: '5', category: 'Labor', item: 'Kees Salary', monthlyCost: 3000, annualCost: 36000, type: 'Fixed', notes: '' },
-    { id: '6', category: 'Labor', item: 'Part-Time Help', monthlyCost: 2000, annualCost: 24000, type: 'Variable', notes: '' },
-    { id: '7', category: 'Labor', item: 'Team', monthlyCost: 0, annualCost: 0, type: 'Fixed', notes: '' },
-    { id: '8', category: 'Software & Tech', item: 'Shopify', monthlyCost: 79, annualCost: 948, type: 'Fixed', notes: '' },
-    { id: '9', category: 'Software & Tech', item: 'DomainName', monthlyCost: 40, annualCost: 480, type: 'Fixed', notes: '' },
-    { id: '10', category: 'Software & Tech', item: 'Framer', monthlyCost: 50, annualCost: 600, type: 'Fixed', notes: '' },
-    { id: '11', category: 'Software & Tech', item: 'Klaviyo', monthlyCost: 80, annualCost: 960, type: 'Variable', notes: '' },
-    { id: '12', category: 'Software & Tech', item: 'Smile.io (loyalty)', monthlyCost: 50, annualCost: 600, type: 'Fixed', notes: '' },
-    { id: '13', category: 'Software & Tech', item: 'Voiceflow', monthlyCost: 60, annualCost: 720, type: 'Fixed', notes: '' },
-    { id: '14', category: 'Software & Tech', item: 'Airtable', monthlyCost: 20, annualCost: 240, type: 'Fixed', notes: '' },
-    { id: '15', category: 'Software & Tech', item: 'Google Workspace', monthlyCost: 40, annualCost: 480, type: 'Fixed', notes: '' },
-    { id: '16', category: 'Software & Tech', item: 'Social Media Software', monthlyCost: 60, annualCost: 720, type: 'Fixed', notes: '' },
-    { id: '17', category: 'Marketing & Content', item: 'Social Media Ads', monthlyCost: 2000, annualCost: 24000, type: 'Variable', notes: '' },
-    { id: '18', category: 'Marketing & Content', item: 'Video/Content Editing', monthlyCost: 2000, annualCost: 24000, type: 'Fixed', notes: '' },
-    { id: '19', category: 'Packaging & Supplies', item: 'Boxes (per 100)', monthlyCost: 150, annualCost: 1800, type: 'Variable', notes: 'Geen idee' },
-    { id: '20', category: 'Software & Tech', item: 'AI costs', monthlyCost: 50, annualCost: 600, type: 'Variable', notes: '' },
-    { id: '21', category: 'Packaging & Supplies', item: 'Butcher paper & string (per 100)', monthlyCost: 50, annualCost: 600, type: 'Variable', notes: '' },
-    { id: '22', category: 'Packaging & Supplies', item: 'Recipe cards (printing, per 100)', monthlyCost: 50, annualCost: 600, type: 'Variable', notes: '' },
-    { id: '23', category: 'Packaging & Supplies', item: 'Spice jars & labels', monthlyCost: 150, annualCost: 1800, type: 'Variable', notes: '' },
-    { id: '24', category: 'Packaging & Supplies', item: 'Stickers & Branding (per 100)', monthlyCost: 150, annualCost: 1800, type: 'Variable', notes: '' },
-    { id: '25', category: 'Operations', item: 'Cleaning Supplies', monthlyCost: 50, annualCost: 600, type: 'Fixed', notes: '' },
-    { id: '26', category: 'Operations', item: 'Bags, gloves, aprons', monthlyCost: 40, annualCost: 480, type: 'Variable', notes: '' },
-    { id: '27', category: 'Operations', item: 'Maintenance & repairs', monthlyCost: 250, annualCost: 3000, type: 'Fixed', notes: '' },
-    { id: '28', category: 'Operations', item: 'Point of Sales Fees', monthlyCost: 0, annualCost: 0, type: 'Variable', notes: '???' },
-    { id: '29', category: 'Operations', item: 'Payment Processing', monthlyCost: 0, annualCost: 0, type: 'Variable', notes: 'x% of revenue' },
-    { id: '30', category: 'Marketing & Content', item: 'BBQ Supplies', monthlyCost: 500, annualCost: 6000, type: 'Variable', notes: '' }
+    { id: '1', category: 'Space', item: 'Rent', monthlyCost: 8000, annualCost: 96000, type: 'Fixed', notes: 'Commercial kitchen space' },
+    { id: '2', category: 'Labor', item: 'Butcher/Chef salary', monthlyCost: 6000, annualCost: 72000, type: 'Fixed', notes: 'Monthly salary' },
+    { id: '3', category: 'Utilities', item: 'Electric & Gas', monthlyCost: 800, annualCost: 9600, type: 'Variable', notes: 'Smoker operation' },
+    { id: '4', category: 'Marketing', item: 'Digital Ads', monthlyCost: 500, annualCost: 6000, type: 'Variable', notes: 'Social media & online' },
+    { id: '5', category: 'Insurance', item: 'Business Insurance', monthlyCost: 400, annualCost: 4800, type: 'Fixed', notes: 'General liability' },
+    { id: '6', category: 'Supplies', item: 'Packaging', monthlyCost: 300, annualCost: 3600, type: 'Variable', notes: 'Boxes, labels, bags' },
+    { id: '7', category: 'Supplies', item: 'Cleaning Supplies', monthlyCost: 40, annualCost: 480, type: 'Variable', notes: 'Sanitizers, cloths' }
   ]);
 
   const [selectedProductFilter, setSelectedProductFilter] = useState<'all' | 'classic' | 'pitmaster'>('all');
@@ -714,7 +656,7 @@ const BreakEvenAnalysis: React.FC = () => {
   const utilizationPercent = totalMonthlyMinutes > 0 ? (totalPrepTime / totalMonthlyMinutes) * 100 : 0;
 
   // Break-even calculations
-  const marginPercent = totalMonthlyOpex > 0 ? (calculations.totalMargin / totalMonthlyOpex) * 100 : 0;
+  const marginPercent = calculations.totalRevenue > 0 ? (calculations.totalMargin / calculations.totalRevenue) * 100 : 0;
   const isProfitable = monthlyNetProfit >= 0;
 
   // Calculate monthly performance with seasonality
@@ -1157,11 +1099,11 @@ const BreakEvenAnalysis: React.FC = () => {
                   </div>
 
                   <p style={{fontSize: '16px', marginBottom: '8px'}}>
-                    Current margin covers <strong>{marginPercent.toFixed(1)}%</strong> of monthly operating expenses
+                    Current margin covers <strong>{marginPercent.toFixed(1)}%</strong> of operating expenses
                   </p>
 
                   <div style={{marginTop: '16px'}}>
-                    <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Margin vs Monthly Operating Expenses</div>
+                    <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Margin vs Operating Expenses</div>
                     <div style={styles.progressBar}>
                       <div style={{
                         ...styles.progressFill,
@@ -2084,7 +2026,7 @@ const BreakEvenAnalysis: React.FC = () => {
                     <table style={styles.table}>
                       <thead>
                         <tr>
-                          <th style={{...styles.tableHeader, minWidth: '180px'}}>Product</th>
+                          <th style={styles.tableHeader}>Product</th>
                           <th style={{...styles.tableHeader, textAlign: 'center'}}>Category</th>
                           <th style={{...styles.tableHeader, textAlign: 'center'}}>Meat Type</th>
                           <th style={{...styles.tableHeader, textAlign: 'right'}}>
@@ -2158,21 +2100,13 @@ const BreakEvenAnalysis: React.FC = () => {
                             
                             return (
                               <tr key={product.id}>
-                                <td style={{...styles.tableCell, ...styles.productNameCell}}
-                                    onMouseEnter={() => setHoveredProductName(product.id)}
-                                    onMouseLeave={() => setHoveredProductName(null)}>
+                                <td style={styles.tableCell}>
                                   <input
                                     type="text"
                                     value={product.name}
                                     onChange={(e) => updateProduct(product.id, 'name', e.target.value)}
-                                    style={styles.productNameInput}
-                                    title={product.name}
+                                    style={styles.input}
                                   />
-                                  {hoveredProductName === product.id && product.name.length > 20 && (
-                                    <div style={styles.productNameTooltip}>
-                                      {product.name}
-                                    </div>
-                                  )}
                                 </td>
                                 <td style={styles.tableCell}>
                                   <select
