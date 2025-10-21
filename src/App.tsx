@@ -589,7 +589,7 @@ const BreakEvenAnalysis: React.FC = () => {
     { id: '1', category: 'Store Renovation', item: 'Store Renovation', estimatedCost: 0, actualCost: 30000, paid: false, notes: '' },
     { id: '2', category: 'Equipment', item: 'BBQ Equipment', estimatedCost: 0, actualCost: 5000, paid: false, notes: '' },
     { id: '3', category: 'Content Production', item: 'Camera, Mic, etc', estimatedCost: 0, actualCost: 2500, paid: false, notes: '' },
-    { id: '4', category: 'Branding & Packaging', item: 'Logo Design, packaging, jars, printi', estimatedCost: 0, actualCost: 2500, paid: false, notes: '' },
+    { id: '4', category: 'Branding & Packaging', item: 'Logo Design, clothes, packaging, jars, prints', estimatedCost: 0, actualCost: 2500, paid: false, notes: '' },
     { id: '5', category: 'Legal & Admin', item: 'Insurance, legal stuff, LLC Setup', estimatedCost: 0, actualCost: 2000, paid: false, notes: '' },
     { id: '6', category: 'Inventory', item: 'Initial Inventory', estimatedCost: 0, actualCost: 5000, paid: false, notes: '' },
     { id: '7', category: 'Marketing & Software', item: 'Photography, website dev, social m', estimatedCost: 0, actualCost: 10000, paid: false, notes: '' },
