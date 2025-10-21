@@ -630,7 +630,7 @@ const BreakEvenAnalysis: React.FC = () => {
   ]);
 
   const [selectedProductFilter, setSelectedProductFilter] = useState<'all' | 'classic' | 'pitmaster'>('all');
-  const [productMixRatios, setProductMixRatios] = useState<{[key: string]: number}>({});
+  const [productMixUnits, setProductMixUnits] = useState<{[key: string]: number}>({});
   const [showProductMixSection, setShowProductMixSection] = useState(false);
 
   // Labor capacity inputs
@@ -645,17 +645,16 @@ const BreakEvenAnalysis: React.FC = () => {
 
   // Initialize product mix ratios when products change
   useEffect(() => {
-    const activeProducts = products.filter(p => p.isActive);
-    if (activeProducts.length > 0 && Object.keys(productMixRatios).length === 0) {
-      // Initialize with equal distribution
-      const equalRatio = 100 / activeProducts.length;
-      const newRatios: {[key: string]: number} = {};
-      activeProducts.forEach(p => {
-        newRatios[p.id] = equalRatio;
-      });
-      setProductMixRatios(newRatios);
-    }
-  }, [products]);
+  const activeProducts = products.filter(p => p.isActive);
+  if (activeProducts.length > 0 && Object.keys(productMixUnits).length === 0) {
+    // Initialize with current units from products table
+    const newUnits: {[key: string]: number} = {};
+    activeProducts.forEach(p => {
+      newUnits[p.id] = p.units;
+    });
+    setProductMixUnits(newUnits);
+  }
+}, [products]);
 
   const addProduct = () => {
     const newProduct: Product = {
@@ -795,16 +794,22 @@ const BreakEvenAnalysis: React.FC = () => {
     });
   };
 
-  const updateProductMixRatio = (productId: string, ratio: number) => {
-    setProductMixRatios(prev => ({
-      ...prev,
-      [productId]: ratio
-    }));
-  };
+  const updateProductMixUnits = (productId: string, units: number) => {
+  setProductMixUnits(prev => ({
+    ...prev,
+    [productId]: Math.max(0, Math.round(units))
+  }));
+};
 
   const resetProductMixToCurrentUnits = () => {
-    const activeProducts = products.filter(p => p.isActive && p.units > 0);
-    const totalUnits = activeProducts.reduce((sum, p) => sum + p.units, 0);
+  const activeProducts = products.filter(p => p.isActive);
+  const newUnits: {[key: string]: number} = {};
+  activeProducts.forEach(p => {
+    newUnits[p.id] = p.units;
+  });
+  setProductMixUnits(newUnits);
+};
+
     
     if (totalUnits === 0) {
       // If no units, distribute equally

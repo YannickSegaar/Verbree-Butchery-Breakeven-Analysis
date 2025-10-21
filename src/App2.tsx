@@ -1,4 +1,4 @@
-import React, { useState, useMemo, CSSProperties, useRef } from 'react';
+import React, { useState, useMemo, CSSProperties, useRef, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Scatter, ScatterChart, ZAxis } from 'recharts';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -630,6 +630,8 @@ const BreakEvenAnalysis: React.FC = () => {
   ]);
 
   const [selectedProductFilter, setSelectedProductFilter] = useState<'all' | 'classic' | 'pitmaster'>('all');
+  const [productMixRatios, setProductMixRatios] = useState<{[key: string]: number}>({});
+  const [showProductMixSection, setShowProductMixSection] = useState(false);
 
   // Labor capacity inputs
   const [hoursPerDay, setHoursPerDay] = useState(5);
@@ -640,6 +642,20 @@ const BreakEvenAnalysis: React.FC = () => {
     Jan: 70, Feb: 70, Mar: 85, Apr: 100, May: 120, Jun: 140,
     Jul: 150, Aug: 145, Sep: 120, Oct: 100, Nov: 80, Dec: 90
   });
+
+  // Initialize product mix ratios when products change
+  useEffect(() => {
+    const activeProducts = products.filter(p => p.isActive);
+    if (activeProducts.length > 0 && Object.keys(productMixRatios).length === 0) {
+      // Initialize with equal distribution
+      const equalRatio = 100 / activeProducts.length;
+      const newRatios: {[key: string]: number} = {};
+      activeProducts.forEach(p => {
+        newRatios[p.id] = equalRatio;
+      });
+      setProductMixRatios(newRatios);
+    }
+  }, [products]);
 
   const addProduct = () => {
     const newProduct: Product = {
@@ -779,6 +795,47 @@ const BreakEvenAnalysis: React.FC = () => {
     });
   };
 
+  const updateProductMixRatio = (productId: string, ratio: number) => {
+    setProductMixRatios(prev => ({
+      ...prev,
+      [productId]: ratio
+    }));
+  };
+
+  const resetProductMixToCurrentUnits = () => {
+    const activeProducts = products.filter(p => p.isActive && p.units > 0);
+    const totalUnits = activeProducts.reduce((sum, p) => sum + p.units, 0);
+    
+    if (totalUnits === 0) {
+      // If no units, distribute equally
+      const equalRatio = 100 / activeProducts.length;
+      const newRatios: {[key: string]: number} = {};
+      activeProducts.forEach(p => {
+        newRatios[p.id] = equalRatio;
+      });
+      setProductMixRatios(newRatios);
+    } else {
+      // Set ratios based on current units
+      const newRatios: {[key: string]: number} = {};
+      activeProducts.forEach(p => {
+        newRatios[p.id] = (p.units / totalUnits) * 100;
+      });
+      setProductMixRatios(newRatios);
+    }
+  };
+
+  const distributeEqually = () => {
+    const activeProducts = products.filter(p => p.isActive);
+    if (activeProducts.length === 0) return;
+    
+    const equalRatio = 100 / activeProducts.length;
+    const newRatios: {[key: string]: number} = {};
+    activeProducts.forEach(p => {
+      newRatios[p.id] = equalRatio;
+    });
+    setProductMixRatios(newRatios);
+  };
+
   const calculations = useMemo(() => {
     const filteredProducts = products.filter(p => {
       // Only include active products in calculations
@@ -860,6 +917,83 @@ const BreakEvenAnalysis: React.FC = () => {
   // Break-even calculations
   const marginPercent = totalMonthlyOpex > 0 ? (calculations.totalMargin / totalMonthlyOpex) * 100 : 0;
   const isProfitable = monthlyNetProfit >= 0;
+
+  // Product Mix & Breakeven Units Calculations
+  const activeProducts = products.filter(p => p.isActive);
+  
+  // Calculate per-product margin and breakeven data
+  const productBreakevenData = activeProducts.map(p => {
+    const trueCost = p.costPrice / (1 - p.wastePercentage / 100);
+    const marginPerUnit = p.sellPrice - trueCost;
+    const marginPercent = p.sellPrice > 0 ? (marginPerUnit / p.sellPrice) * 100 : 0;
+    
+    // Units needed if this was the ONLY product (theoretical)
+    const unitsNeededAlone = marginPerUnit > 0 ? totalMonthlyOpex / marginPerUnit : 0;
+    
+    return {
+      ...p,
+      trueCost,
+      marginPerUnit,
+      marginPercent,
+      unitsNeededAlone
+    };
+  });
+
+  // Calculate breakeven with product mix ratios
+  const totalMixRatio = Object.values(productMixRatios).reduce((sum, r) => sum + r, 0);
+  const normalizedRatios: {[key: string]: number} = {};
+  
+  // Normalize ratios to sum to 100%
+  if (totalMixRatio > 0) {
+    Object.keys(productMixRatios).forEach(id => {
+      normalizedRatios[id] = (productMixRatios[id] / totalMixRatio) * 100;
+    });
+  }
+
+  // Calculate weighted average margin
+  let weightedAvgMargin = 0;
+  if (totalMixRatio > 0) {
+    activeProducts.forEach(p => {
+      const ratio = normalizedRatios[p.id] || 0;
+      const trueCost = p.costPrice / (1 - p.wastePercentage / 100);
+      const marginPerUnit = p.sellPrice - trueCost;
+      weightedAvgMargin += (marginPerUnit * ratio) / 100;
+    });
+  }
+
+  // Total units needed to break even with current mix
+  const totalUnitsNeededForBreakeven = weightedAvgMargin > 0 
+    ? totalMonthlyOpex / weightedAvgMargin 
+    : 0;
+
+  // Calculate units needed per product based on mix
+  const productMixBreakeven = activeProducts.map(p => {
+    const ratio = normalizedRatios[p.id] || 0;
+    const unitsNeeded = (totalUnitsNeededForBreakeven * ratio) / 100;
+    const trueCost = p.costPrice / (1 - p.wastePercentage / 100);
+    const marginPerUnit = p.sellPrice - trueCost;
+    const revenueContribution = unitsNeeded * p.sellPrice;
+    const marginContribution = unitsNeeded * marginPerUnit;
+    
+    return {
+      id: p.id,
+      name: p.name,
+      category: p.category,
+      currentUnits: p.units,
+      ratio: ratio,
+      unitsNeeded: Math.round(unitsNeeded),
+      marginPerUnit,
+      revenueContribution,
+      marginContribution,
+      sellPrice: p.sellPrice
+    };
+  }).sort((a, b) => b.marginContribution - a.marginContribution);
+
+  // Calculate months to breakeven with current units and mix
+  const currentMonthlyMargin = calculations.totalMargin;
+  const monthsToBreakeven = currentMonthlyMargin > 0 
+    ? Math.ceil(totalStartupCosts / (currentMonthlyMargin - totalMonthlyOpex))
+    : Infinity;
 
   // Calculate monthly performance with seasonality
   const monthlyData = Object.entries(seasonalMultipliers).map(([month, multiplier]) => {
@@ -2486,6 +2620,388 @@ const BreakEvenAnalysis: React.FC = () => {
                         </tr>
                       </tfoot>
                     </table>
+                  </div>
+                </> 
+              )}
+            </div>
+
+            {/* NEW: Product Mix & Breakeven Units Analysis */}
+            <div data-section data-section-title="Product Mix & Breakeven Units" style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
+                  Product Mix & Breakeven Units
+                  <InfoIcon id="panel-product-mix" text="Calculate how many units of each product you need to sell based on your ideal product mix to break even each month. Adjust the ratios to reflect realistic sales patterns." />
+                </h2>
+                <button
+                  onMouseEnter={() => setHoveredEye('product-mix')}
+                  onMouseLeave={() => setHoveredEye(null)}
+                  onClick={() => setShowProductMixSection(!showProductMixSection)}
+                  style={{
+                    ...styles.eyeButton,
+                    ...(hoveredEye === 'product-mix' ? styles.eyeButtonHover : {})
+                  }}
+                >
+                  <EyeIcon isOpen={showProductMixSection} />
+                </button>
+              </div>
+
+              {showProductMixSection && (
+                <>
+                  {/* Quick Actions */}
+                  <div style={{display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap'}}>
+                    <button
+                      onClick={resetProductMixToCurrentUnits}
+                      onMouseEnter={() => setHoveredButton('reset-mix')}
+                      onMouseLeave={() => setHoveredButton(null)}
+                      style={{
+                        ...styles.button,
+                        backgroundColor: '#2F3E46',
+                        ...(hoveredButton === 'reset-mix' ? {backgroundColor: '#1a2328'} : {})
+                      }}
+                    >
+                      Reset to Current Units
+                    </button>
+                    <button
+                      onClick={distributeEqually}
+                      onMouseEnter={() => setHoveredButton('equal-dist')}
+                      onMouseLeave={() => setHoveredButton(null)}
+                      style={{
+                        ...styles.button,
+                        backgroundColor: '#587C74',
+                        ...(hoveredButton === 'equal-dist' ? styles.buttonHover : {})
+                      }}
+                    >
+                      Distribute Equally
+                    </button>
+                  </div>
+
+                  {/* Summary Metrics */}
+                  <div style={styles.gridTwo}>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#e8f4f1',
+                      borderLeft: '4px solid #587C74'
+                    }}>
+                      <h3 style={{fontWeight: 'bold', color: '#587C74', marginBottom: '8px', fontSize: '16px'}}>
+                        Weighted Avg Margin
+                      </h3>
+                      <p style={{fontSize: '24px', fontWeight: 'bold', color: '#587C74', margin: 0}}>
+                        €{weightedAvgMargin.toFixed(2)}
+                      </p>
+                      <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
+                        Per unit based on your product mix
+                      </p>
+                    </div>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#e8f0f4',
+                      borderLeft: '4px solid #2F3E46'
+                    }}>
+                      <h3 style={{fontWeight: 'bold', color: '#2F3E46', marginBottom: '8px', fontSize: '16px'}}>
+                        Total Units Needed
+                      </h3>
+                      <p style={{fontSize: '24px', fontWeight: 'bold', color: '#2F3E46', margin: 0}}>
+                        {Math.round(totalUnitsNeededForBreakeven).toLocaleString()}
+                      </p>
+                      <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
+                        Monthly to break even (€{totalMonthlyOpex.toFixed(2)} opex)
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Profit/Loss Panel - NEW */}
+                  <div style={{
+                    ...styles.infoBox,
+                    backgroundColor: calculations.totalMargin >= totalMonthlyOpex ? '#e8f4f1' : '#ffe5e5',
+                    borderLeft: calculations.totalMargin >= totalMonthlyOpex ? '4px solid #587C74' : '4px solid #BB463C',
+                    marginTop: '16px'
+                  }}>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
+                      <h3 style={{
+                        fontWeight: 'bold', 
+                        color: calculations.totalMargin >= totalMonthlyOpex ? '#587C74' : '#BB463C', 
+                        fontSize: '16px',
+                        margin: 0
+                      }}>
+                        {calculations.totalMargin >= totalMonthlyOpex ? '✅ Profitable!' : '❌ Not Yet Profitable'}
+                      </h3>
+                      <span style={{
+                        padding: '6px 12px',
+                        backgroundColor: calculations.totalMargin >= totalMonthlyOpex ? '#587C74' : '#BB463C',
+                        color: '#fff',
+                        borderRadius: '6px',
+                        fontWeight: 'bold',
+                        fontSize: '14px'
+                      }}>
+                        {calculations.totalMargin >= totalMonthlyOpex ? 'ABOVE BREAKEVEN' : 'BELOW BREAKEVEN'}
+                      </span>
+                    </div>
+                    
+                    <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '12px'}}>
+                      <div>
+                        <div style={{fontSize: '12px', color: '#282828', marginBottom: '4px'}}>Current Monthly Margin</div>
+                        <div style={{fontSize: '20px', fontWeight: 'bold', color: '#587C74'}}>
+                          €{calculations.totalMargin.toFixed(2)}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{fontSize: '12px', color: '#282828', marginBottom: '4px'}}>Monthly Opex</div>
+                        <div style={{fontSize: '20px', fontWeight: 'bold', color: '#BB463C'}}>
+                          €{totalMonthlyOpex.toFixed(2)}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{fontSize: '12px', color: '#282828', marginBottom: '4px'}}>
+                          {calculations.totalMargin >= totalMonthlyOpex ? 'Monthly Profit' : 'Monthly Loss'}
+                        </div>
+                        <div style={{
+                          fontSize: '20px', 
+                          fontWeight: 'bold', 
+                          color: calculations.totalMargin >= totalMonthlyOpex ? '#587C74' : '#BB463C'
+                        }}>
+                          {calculations.totalMargin >= totalMonthlyOpex ? '+' : ''}€{(calculations.totalMargin - totalMonthlyOpex).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      padding: '12px',
+                      backgroundColor: calculations.totalMargin >= totalMonthlyOpex ? 'rgba(88, 124, 116, 0.1)' : 'rgba(187, 70, 60, 0.1)',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      color: '#282828'
+                    }}>
+                      {calculations.totalMargin >= totalMonthlyOpex ? (
+                        <>
+                          <strong>💰 Great news!</strong> Your current product mix and sales volume generates{' '}
+                          <strong style={{color: '#587C74'}}>
+                            €{(calculations.totalMargin - totalMonthlyOpex).toFixed(2)} profit per month
+                          </strong>
+                          . This means you're covering all operating expenses and making money! At this rate, you'll recover 
+                          your startup costs (€{totalStartupCosts.toFixed(2)}) in approximately{' '}
+                          <strong>
+                            {Math.ceil(totalStartupCosts / (calculations.totalMargin - totalMonthlyOpex))} months
+                          </strong>.
+                        </>
+                      ) : (
+                        <>
+                          <strong>⚠️ Attention needed:</strong> Your current sales volume is not yet covering monthly expenses. 
+                          You're short by{' '}
+                          <strong style={{color: '#BB463C'}}>
+                            €{Math.abs(calculations.totalMargin - totalMonthlyOpex).toFixed(2)} per month
+                          </strong>
+                          . To break even, you need to sell{' '}
+                          <strong>{Math.round(totalUnitsNeededForBreakeven).toLocaleString()} total units</strong> instead of 
+                          your current {products.filter(p => p.isActive).reduce((sum, p) => sum + p.units, 0)} units. 
+                          See the table below for the exact breakdown per product.
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Product Mix Ratio Controls */}
+                  <div style={{marginTop: '24px', marginBottom: '24px'}}>
+                    <h3 style={{fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#2F3E46'}}>
+                      Product Mix Ratios (Total: {totalMixRatio.toFixed(0)}%)
+                    </h3>
+                    <div style={{display: 'grid', gap: '12px'}}>
+                      {activeProducts.map(p => {
+                        const ratio = productMixRatios[p.id] || 0;
+                        const normalizedRatio = totalMixRatio > 0 ? (ratio / totalMixRatio) * 100 : 0;
+                        return (
+                          <div key={p.id} style={{
+                            display: 'grid',
+                            gridTemplateColumns: '2fr 1fr 120px',
+                            gap: '12px',
+                            alignItems: 'center',
+                            padding: '12px',
+                            backgroundColor: '#f5f5f5',
+                            borderRadius: '8px'
+                          }}>
+                            <div>
+                              <div style={{fontWeight: '600', fontSize: '14px'}}>{p.name}</div>
+                              <div style={{fontSize: '12px', color: '#282828'}}>
+                                Margin: €{((p.sellPrice - (p.costPrice / (1 - p.wastePercentage / 100)))).toFixed(2)}/unit
+                              </div>
+                            </div>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                step="1"
+                                value={ratio}
+                                onChange={(e) => updateProductMixRatio(p.id, parseFloat(e.target.value))}
+                                style={{flex: 1, cursor: 'pointer'}}
+                              />
+                            </div>
+                            <div style={{textAlign: 'right'}}>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="1"
+                                value={ratio.toFixed(0)}
+                                onChange={(e) => updateProductMixRatio(p.id, parseFloat(e.target.value) || 0)}
+                                style={{
+                                  ...styles.inputSmall,
+                                  width: '70px',
+                                  textAlign: 'center'
+                                }}
+                              />
+                              <span style={{marginLeft: '4px', fontSize: '14px', color: '#282828'}}>
+                                ({normalizedRatio.toFixed(1)}%)
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Breakeven Units Breakdown */}
+                  <div style={{marginTop: '24px'}}>
+                    <h3 style={{fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#2F3E46'}}>
+                      Units Needed per Product to Break Even
+                    </h3>
+                    <div style={{overflowX: 'auto'}}>
+                      <table style={styles.table}>
+                        <thead>
+                          <tr>
+                            <th style={{...styles.tableHeader, textAlign: 'left'}}>Product</th>
+                            <th style={{...styles.tableHeader, textAlign: 'center'}}>Mix Ratio</th>
+                            <th style={{...styles.tableHeader, textAlign: 'right'}}>Current Units</th>
+                            <th style={{...styles.tableHeader, textAlign: 'right'}}>Units Needed</th>
+                            <th style={{...styles.tableHeader, textAlign: 'right'}}>Margin/Unit</th>
+                            <th style={{...styles.tableHeader, textAlign: 'right'}}>Revenue Contrib.</th>
+                            <th style={{...styles.tableHeader, textAlign: 'right'}}>Margin Contrib.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productMixBreakeven.map(p => (
+                            <tr key={p.id}>
+                              <td style={styles.tableCell}>
+                                <div style={{fontWeight: '600'}}>{p.name}</div>
+                                <div style={{fontSize: '12px', color: '#282828'}}>{p.category}</div>
+                              </td>
+                              <td style={{...styles.tableCell, textAlign: 'center'}}>
+                                <span style={{
+                                  padding: '4px 8px',
+                                  backgroundColor: '#e8f4f1',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  fontWeight: '600',
+                                  color: '#587C74'
+                                }}>
+                                  {p.ratio.toFixed(1)}%
+                                </span>
+                              </td>
+                              <td style={{...styles.tableCell, textAlign: 'right'}}>
+                                {p.currentUnits}
+                              </td>
+                              <td style={{...styles.tableCell, textAlign: 'right'}}>
+                                <strong style={{color: p.unitsNeeded > p.currentUnits ? '#BB463C' : '#587C74'}}>
+                                  {p.unitsNeeded}
+                                </strong>
+                              </td>
+                              <td style={{...styles.tableCell, textAlign: 'right'}}>
+                                €{p.marginPerUnit.toFixed(2)}
+                              </td>
+                              <td style={{...styles.tableCell, textAlign: 'right'}}>
+                                €{p.revenueContribution.toFixed(2)}
+                              </td>
+                              <td style={{...styles.tableCell, textAlign: 'right'}}>
+                                <strong style={{color: '#587C74'}}>
+                                  €{p.marginContribution.toFixed(2)}
+                                </strong>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot style={{backgroundColor: '#f5f5f5', fontWeight: 'bold'}}>
+                          <tr>
+                            <td colSpan={3} style={{...styles.tableCell, textAlign: 'right'}}>TOTALS:</td>
+                            <td style={{...styles.tableCell, textAlign: 'right', color: '#2F3E46'}}>
+                              {Math.round(totalUnitsNeededForBreakeven).toLocaleString()}
+                            </td>
+                            <td style={styles.tableCell}></td>
+                            <td style={{...styles.tableCell, textAlign: 'right', color: '#2F3E46'}}>
+                              €{productMixBreakeven.reduce((sum, p) => sum + p.revenueContribution, 0).toFixed(2)}
+                            </td>
+                            <td style={{...styles.tableCell, textAlign: 'right', color: '#587C74'}}>
+                              €{totalMonthlyOpex.toFixed(2)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Visual Breakdown Charts */}
+                  <div style={{marginTop: '32px'}}>
+                    <h3 style={{fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#2F3E46'}}>
+                      Visual Contribution Breakdown
+                    </h3>
+                    <div style={styles.gridTwo}>
+                      <div>
+                        <h4 style={{fontSize: '14px', marginBottom: '12px', color: '#282828'}}>
+                          Margin Contribution by Product
+                        </h4>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <PieChart>
+                            <Pie
+                              data={productMixBreakeven.map(p => ({
+                                name: p.name,
+                                value: p.marginContribution
+                              }))}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={(entry: any) => `${entry.name}: ${((entry.value / totalMonthlyOpex) * 100).toFixed(1)}%`}
+                              outerRadius={80}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {productMixBreakeven.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={['#587C74', '#2F3E46', '#BB463C', '#E8A838', '#4a6b64', '#8b9a96'][index % 6]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value: any) => `€${parseFloat(value).toFixed(2)}`} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div>
+                        <h4 style={{fontSize: '14px', marginBottom: '12px', color: '#282828'}}>
+                          Units Needed vs Current Units
+                        </h4>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart data={productMixBreakeven}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="currentUnits" fill="#587C74" name="Current Units" />
+                            <Bar dataKey="unitsNeeded" fill="#2F3E46" name="Units Needed" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Info Box */}
+                  <div style={{
+                    ...styles.infoBox,
+                    backgroundColor: '#fff3cd',
+                    borderLeft: '4px solid #E8A838',
+                    marginTop: '24px'
+                  }}>
+                    <p style={{color: '#282828', margin: 0, fontSize: '14px'}}>
+                      <strong>💡 How to use this tool:</strong> Adjust the mix ratios to reflect realistic sales patterns. 
+                      For example, if ribeye steaks are premium items you sell less frequently, give them a lower ratio (10-20%), 
+                      while everyday items like sausages might get 30-40%. The tool calculates how many units you need 
+                      of each product to hit your monthly breakeven of €{totalMonthlyOpex.toFixed(2)}.
+                    </p>
                   </div>
                 </>
               )}
