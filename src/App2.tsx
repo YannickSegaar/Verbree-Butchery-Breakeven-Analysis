@@ -1,8 +1,12 @@
-import React, { useState, useMemo, CSSProperties } from 'react';
+import React, { useState, useMemo, CSSProperties, useRef } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Scatter, ScatterChart, ZAxis } from 'recharts';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+
 
 interface Product {
   id: string;
+  productId: string;
   name: string;
   category: 'Classic' | 'Pitmaster';
   meatType: 'Beef' | 'Pork' | 'Poultry';
@@ -13,6 +17,7 @@ interface Product {
   sellPrice: number;
   margin: number;
   units: number;
+  isActive: boolean;
 }
 
 interface StartupCost {
@@ -221,228 +226,454 @@ const styles = {
     height: '24px',
     backgroundColor: '#e5e5e5',
     borderRadius: '12px',
-    overflow: 'hidden',
+    overflow: 'hidden' as const,
     marginTop: '8px'
   } as CSSProperties,
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#587C74',
+    transition: 'width 0.3s',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingRight: '8px',
+    color: '#fff',
+    fontSize: '12px',
+    fontWeight: '600'
+  } as CSSProperties,
   infoBox: {
-    padding: '16px',
+    padding: '20px',
     borderRadius: '8px',
+    marginBottom: '16px'
+  } as CSSProperties,
+  warningBox: {
+    backgroundColor: '#fff3cd',
+    border: '1px solid #BB463C',
+    borderLeft: '4px solid #BB463C',
+    borderRadius: '8px',
+    padding: '20px',
     marginTop: '16px'
   } as CSSProperties,
   gridTwo: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
     gap: '16px',
-    marginTop: '24px'
+    marginBottom: '24px'
+  } as CSSProperties,
+  filterButtonsContainer: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap' as const,
+    alignItems: 'center',
+    marginBottom: '16px'
+  } as CSSProperties,
+  sectionDivider: {
+    marginTop: '32px',
+    paddingTop: '32px',
+    borderTop: '2px solid #e5e5e5'
+  } as CSSProperties,
+  eyeButton: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'opacity 0.2s',
+    opacity: 0.6
+  } as CSSProperties,
+  eyeButtonHover: {
+    opacity: 1
+  } as CSSProperties,
+  infoIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    height: '18px',
+    borderRadius: '50%',
+    backgroundColor: '#587C74',
+    color: '#fff',
+    fontSize: '12px',
+    fontWeight: 'bold',
+    cursor: 'help',
+    marginLeft: '6px',
+    position: 'relative' as const,
+    flexShrink: 0
   } as CSSProperties,
   tooltip: {
     position: 'absolute' as const,
+    top: '25px',
+    right: '0',
+    backgroundColor: '#2F3E46',
+    color: '#fff',
+    padding: '12px 16px',
+    borderRadius: '8px',
+    fontSize: '13px',
+    lineHeight: '1.5',
+    width: '280px',
+    zIndex: 10000,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+    pointerEvents: 'none' as const,
+    whiteSpace: 'normal' as const
+  } as CSSProperties,
+  tooltipArrow: {
+    position: 'absolute' as const,
+    top: '-6px',
+    right: '10px',
+    width: 0,
+    height: 0,
+    borderLeft: '6px solid transparent',
+    borderRight: '6px solid transparent',
+    borderBottom: '6px solid #2F3E46'
+  } as CSSProperties,
+  productNameCell: {
+    position: 'relative' as const,
+    minWidth: '180px',
+    maxWidth: '180px'
+  } as CSSProperties,
+  productNameInput: {
+    width: '100%',
+    padding: '8px',
+    border: '1px solid #d4d4d4',
+    borderRadius: '4px',
+    fontSize: '14px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const
+  } as CSSProperties,
+  productNameTooltip: {
+    position: 'absolute' as const,
+    top: '100%',
+    left: '0',
+    marginTop: '4px',
     backgroundColor: '#2F3E46',
     color: '#fff',
     padding: '8px 12px',
-    borderRadius: '4px',
-    fontSize: '12px',
-    whiteSpace: 'nowrap' as const,
+    borderRadius: '6px',
+    fontSize: '13px',
     zIndex: 1000,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
     pointerEvents: 'none' as const,
-    top: '-35px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+    whiteSpace: 'nowrap' as const,
+    maxWidth: '300px'
   } as CSSProperties,
-  sectionDivider: {
-    borderTop: '2px solid #587C74',
-    margin: '32px 0',
-    paddingTop: '24px'
+  dragHandle: {
+    cursor: 'grab',
+    padding: '4px',
+    color: '#999',
+    fontSize: '18px',
+    userSelect: 'none' as const,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  } as CSSProperties,
+  dragHandleActive: {
+    cursor: 'grabbing'
   } as CSSProperties,
   checkbox: {
     width: '18px',
     height: '18px',
     cursor: 'pointer',
-    marginRight: '8px'
+    accentColor: '#587C74'
   } as CSSProperties
 };
 
-const COLORS = {
-  classic: '#2F3E46',
-  pitmaster: '#587C74',
-  beef: '#BB463C',
-  pork: '#E07A5F',
-  poultry: '#F2CC8F'
-};
-
-const BreakEvenAnalysis = () => {
-  const [activeTab, setActiveTab] = useState<'breakeven' | 'startup' | 'monthly'>('breakeven');
+const BreakEvenAnalysis: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'break-even' | 'startup' | 'monthly'>('break-even');
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
-  const [hoveredCell, setHoveredCell] = useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<'all' | 'Classic' | 'Pitmaster'>('all');
-  const [hoursPerDay, setHoursPerDay] = useState<number>(5);
-  const [daysPerMonth, setDaysPerMonth] = useState<number>(18);
+  const [hoveredEye, setHoveredEye] = useState<string | null>(null);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
-  // Chart visibility toggles
-  const [showMargin, setShowMargin] = useState(true);
-  const [showThroughput, setShowThroughput] = useState(false);
-  const [showHourlyPotential, setShowHourlyPotential] = useState(false);
+  // Ref for the content to export
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Panel visibility states
+  const [showBreakEvenStatus, setShowBreakEvenStatus] = useState(true);
+  const [showProfitProjection, setShowProfitProjection] = useState(true);
+  const [showLaborCapacity, setShowLaborCapacity] = useState(true);
+  const [showSeasonality, setShowSeasonality] = useState(true);
+  const [showProductPerformance, setShowProductPerformance] = useState(true);
+  const [showProductEfficiency, setShowProductEfficiency] = useState(true);
+  const [showMarginContribution, setShowMarginContribution] = useState(true);
+  const [showClassicVsPitmaster, setShowClassicVsPitmaster] = useState(true);
+  const [showSalesVolumeInput, setShowSalesVolumeInput] = useState(true);
+
+  // Product performance chart view states
+  const [showMarginPerUnit, setShowMarginPerUnit] = useState(true);
+  const [showUnitsPerHour, setShowUnitsPerHour] = useState(false);
+  const [showHourlyProfitPotential, setShowHourlyProfitPotential] = useState(false);
   const [showMonthlySalesPotential, setShowMonthlySalesPotential] = useState(false);
 
-  // Seasonality multipliers (percentage of baseline sales)
-  const [seasonalityMultipliers, setSeasonalityMultipliers] = useState({
-    jan: 70,
-    feb: 70,
-    mar: 85,
-    apr: 100,
-    may: 120,
-    jun: 140,
-    jul: 150,
-    aug: 145,
-    sep: 120,
-    oct: 100,
-    nov: 80,
-    dec: 90
-  });
+  // Tooltip hover state
+  const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null);
+  const [hoveredProductName, setHoveredProductName] = useState<string | null>(null);
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
 
   const [products, setProducts] = useState<Product[]>([
-    {
-      id: '1',
-      name: 'IERS Classic Burger',
-      category: 'Classic',
-      meatType: 'Beef',
-      weight: 3.2,
-      costPrice: 15.45,
-      wastePercentage: 10,
-      prepTimeMinutes: 10,
-      sellPrice: 10,
-      margin: -7.00,
-      units: 80
-    },
-    {
-      id: '2',
-      name: 'IERS Pitmaster Brisket',
-      category: 'Pitmaster',
-      meatType: 'Beef',
-      weight: 1,
-      costPrice: 18.79,
-      wastePercentage: 10,
-      prepTimeMinutes: 12,
-      sellPrice: 100,
-      margin: 79.33,
-      units: 10
-    },
-    {
-      id: '3',
-      name: 'IERS Pitmaster Ribs',
-      category: 'Pitmaster',
-      meatType: 'Pork',
-      weight: 6,
-      costPrice: 13.8,
-      wastePercentage: 10,
-      prepTimeMinutes: 15,
-      sellPrice: 100,
-      margin: 84.82,
-      units: 10
-    },
-    {
-      id: '4',
-      name: 'IERS Pitmaster Steak',
-      category: 'Pitmaster',
-      meatType: 'Beef',
-      weight: 2.5,
-      costPrice: 15.55,
-      wastePercentage: 10,
-      prepTimeMinutes: 10,
-      sellPrice: 100,
-      margin: 82.89,
-      units: 10
-    },
-    {
-      id: '5',
-      name: 'IERS Pitmaster Lamb',
-      category: 'Pitmaster',
-      meatType: 'Beef',
-      weight: 2.5,
-      costPrice: 41,
-      wastePercentage: 10,
-      prepTimeMinutes: 18,
-      sellPrice: 100,
-      margin: 54.90,
-      units: 10
-    },
-    {
-      id: '6',
-      name: 'IERS Pitmaster Pulled Pork',
-      category: 'Pitmaster',
-      meatType: 'Pork',
-      weight: 3.7,
-      costPrice: 29.7,
-      wastePercentage: 10,
-      prepTimeMinutes: 20,
-      sellPrice: 100,
-      margin: 67.33,
-      units: 10
-    }
-  ]);
+  { id: '1', productId: '11000', name: 'TOP half varken EAA', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 2.95, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '2', productId: '11007', name: 'TOP varkens vlies', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 3.45, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '3', productId: '11009', name: 'PSB TOP half varken z/b m/zw', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 3.10, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '4', productId: '11010', name: 'TOP V.pootham', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 4.16, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '5', productId: '11020', name: 'TOP V.winkelham', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 4.16, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '6', productId: '11022', name: 'TOP 3D V.ham z/b z/zw z/spek', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.86, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '7', productId: '11028', name: 'TOP 5D V.ham schoon', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 6.52, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '8', productId: '11030', name: 'TOP V.rib lang', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.09, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '9', productId: '11033', name: 'TOP V.LICHTE rib lang', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.09, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '10', productId: '11040', name: 'TOP V.rib kort', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.19, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '11', productId: '11041', name: 'TOP V.rib kort u/b', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.69, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '12', productId: '11050', name: 'TOP V.procureur', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 4.43, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '13', productId: '11060', name: 'TOP V.buik', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 4.42, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '14', productId: '11065', name: 'TOP V.buik z/b z/kn m/zw', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.67, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '15', productId: '11066', name: 'TOP V.buik u/b z/kn m/zw', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.67, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '16', productId: '11070', name: 'TOP V.schouder', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 3.44, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '17', productId: '11072', name: '3D !! TOP V.schouder z/b schoon', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 4.61, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '18', productId: '11080', name: 'TOP V.plaatlap', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 4.24, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '19', productId: '11088', name: 'TOP V.lomo (rib u/b z/k)', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 6.08, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '20', productId: '11100', name: 'TOP V.wang z/zw', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 3.41, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '21', productId: '11105', name: 'Super V.haas z/k Hollands', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 8.60, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '22', productId: '11106', name: 'SUPER V.haas m/k Hollands vers', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 7.60, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '23', productId: '11107', name: 'TOP V.lever', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 2.10, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '24', productId: '11145', name: 'TOP dun v.krab z/bb', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 3.35, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '25', productId: '11165', name: 'V.kophaas Hollands gevliesd', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 7.15, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '26', productId: '11180', name: '80/20 TOP V.magermet vers', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 3.97, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '27', productId: '11190', name: 'TOP V.bovenbil z/deksel', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.74, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '28', productId: '11195', name: 'TOP V.bovenbil z/d GEVLIESD', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 6.19, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '29', productId: '11200', name: 'TOP Deksel varkens', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.26, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '30', productId: '11210', name: 'TOP V.vangvlees', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 4.42, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '31', productId: '11220', name: 'TOP V.middel', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 3.53, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '32', productId: '11229', name: 'TOP V.middel INGEZAAGD!!', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.33, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '33', productId: '11230', name: 'TOP V.sp.st.+ lende m/zw', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.35, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '34', productId: '11231', name: 'TOP V.sp.st.+ lende gev', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.76, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '35', productId: '11233', name: 'TOP V.LICHTE middel ingezaagd', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.73, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '36', productId: '11240', name: 'TOP V.platte bil', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 6.12, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '37', productId: '11250', name: 'TOP V.platte bil z/.peseeind', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 6.67, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '38', productId: '11260', name: 'TOP V.coburger z/zw z/spek', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.86, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '39', productId: '11261', name: 'TOP V.coburger m/zw', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.36, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '40', productId: '11270', name: 'TOP V.bacon i/b m/zw', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.09, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '41', productId: '11291', name: 'TOP V.pootjes', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 1.10, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '42', productId: '11310', name: 'MET KET spareribs vers', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.75, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '43', productId: '11311', name: 'Spareribs vers z/ket', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 6.00, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '44', productId: '11881', name: '* GROF 6MM Varkensreepjes 4x2,5 kg', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.55, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '45', productId: '11882', name: '* FUN 4MM Varkensreepjes 4x2,5 kg', category: 'Classic', meatType: 'Pork', weight: 1, costPrice: 5.55, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '46', productId: '12000', name: 'ZEEUWS half varken', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.48, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '47', productId: '12002', name: 'ZEEUWS half varken uitgesneden', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.58, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '48', productId: '12008', name: 'ZEEUWS half varken PSB 2/b z/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.78, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '49', productId: '12010', name: 'ZEEUWS pootham', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 5.08, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '50', productId: '12014', name: 'ZEEUWS pootham z/b m/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.37, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '51', productId: '12015', name: 'ZEEUWS pootham 2/b z/zw + spek', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 5.96, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '52', productId: '12018', name: 'ZEEUWS half varken 3 delen', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.53, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '53', productId: '12022', name: 'ZEEUWS "3d" ham z/b z/zw z/spek', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.56, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '54', productId: '12030', name: 'ZEEUWS rib lang', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 5.83, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '55', productId: '12040', name: 'ZEEUWS rib kort', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.13, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '56', productId: '12041', name: 'ZEEUWS rib kort u/b', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.01, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '57', productId: '12050', name: 'ZEEUWS procureur', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 4.81, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '58', productId: '12052', name: 'ZEEUWS proc U/B/Z/B/K', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 5.89, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '59', productId: '12060', name: 'ZEEUWS buik', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 5.21, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '60', productId: '12065', name: 'ZEEUWS buik z/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 5.50, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '61', productId: '12066', name: 'ZEEUWS buik kaal', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.50, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '62', productId: '12070', name: 'ZEEUWS buik b/m/z', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.03, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '63', productId: '12072', name: 'ZEEUWS schouder', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.67, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '64', productId: '12073', name: 'ZEEUWS schouder z/b schoon', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 5.14, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '65', productId: '12075', name: 'ZEEUWS schouder met krab', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.87, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '66', productId: '12080', name: 'ZEEUWS plaatlap', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 4.55, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '67', productId: '12088', name: 'ZEEUWS lomos', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.22, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '68', productId: '12100', name: 'ZEEUWS wang z/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 4.04, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '69', productId: '12101', name: 'ZEEUWS MET zwoerd wangen', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.94, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '70', productId: '12110', name: 'ZEEUWS krabbietjes dik', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.85, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '71', productId: '12120', name: 'ZEEUWS magermet vers', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 4.07, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '72', productId: '12181', name: 'ZEEUWS 50/50 magermet vers', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 4.09, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '73', productId: '12190', name: 'ZEEUWS bovenbil m/deksel', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.09, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '74', productId: '12192', name: 'ZEEUWS bovenbil z/d', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.39, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '75', productId: '12193', name: 'ZEEUWS bovenbil z/d GEVLIESD', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.74, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '76', productId: '12194', name: 'ZEEUWS bovenbil gevliesd z/bijkogel', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.99, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '77', productId: '12200', name: 'ZEEUWS worstspek z/zwoerd', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.24, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '78', productId: '12210', name: 'ZEEUWS buikzwoerd', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 0.65, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '79', productId: '12220', name: 'ZEEUWS vangvlees', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 4.92, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '80', productId: '12230', name: 'ZEEUWS middel', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 4.63, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '81', productId: '12231', name: 'ZEEUWS middel INGEZAAGD!!', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 4.63, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '82', productId: '12240', name: 'ZEEUWS middel u/b z/zw z/kn', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.16, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '83', productId: '12241', name: 'ZEEUWS middel u/b m/zw z/kn', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.06, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '84', productId: '12250', name: 'ZEEUWS sp.st.+ lende m/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.02, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '85', productId: '12251', name: 'ZEEUWS sp.st.+ dikke lende', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.07, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '86', productId: '12252', name: 'ZEEUWS sp.st.+ lende gevl', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 5.95, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '87', productId: '12254', name: 'ZEEUWS platte bil', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.32, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '88', productId: '12255', name: 'ZEEUWS platte bil m/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.45, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '89', productId: '12253', name: 'ZEEUWS platte bil gevl. z/peeseind', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.92, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '90', productId: '12255b', name: 'ZEEUWS platte bil m/spek z/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.52, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '91', productId: '12260', name: 'ZEEUWS coburger z/zw z/spek', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.04, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '92', productId: '12261', name: 'ZEEUWS coburger m/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.89, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '93', productId: '12263', name: 'ZEEUWS coburger z/zw met spek', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.94, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '94', productId: '12270', name: 'ZEEUWS bacon i/b m/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.09, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '95', productId: '12272', name: 'ZEEUWS bacon u/b m/zwoerd', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.70, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '96', productId: '12286', name: 'ZEEUWS hamschijf dik', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.30, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '97', productId: '12288', name: 'ZEEUWS kuitjes z/zw met spaakbeen', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 4.38, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '98', productId: '12290', name: 'ZEEUWS hamschijven z/hiel', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.60, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '99', productId: '12292', name: 'ZEEUWS staart', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 4.15, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '100', productId: '12293', name: 'ZEEUWS knie vd schouder', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 2.35, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '101', productId: '12300', name: 'ZEEUWS haas gevliesd', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 8.76, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '102', productId: '12305', name: 'ZEEUWS haas m/k Hollands', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.90, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '103', productId: '12307', name: 'ZEEUWS lever', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 2.25, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '104', productId: '12310', name: 'ZEEUWS tong', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 3.15, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '105', productId: '12320', name: 'ZEEUWS hart', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 2.90, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '106', productId: '12325', name: 'ZEEUWS longen', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 2.05, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '107', productId: '12330', name: 'ZEEUWS nier', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 1.85, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '108', productId: '12340', name: 'ZEEUWS dunne lende', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.55, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '109', productId: '12341', name: 'ZEEUWS dunne lende m/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.90, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '110', productId: '12345', name: 'ZEEUWS lende gevliesd', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 8.10, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '111', productId: '12350', name: 'ZEEUWS schouderfilet', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.44, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '112', productId: '12352', name: 'ZEEUWS platte bil gevliesd', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.88, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '113', productId: '12353', name: 'ZEEUWS platte bil z/peeseind', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.99, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '114', productId: '12354', name: 'ZEEUWS platte bil m/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.10, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '115', productId: '12355', name: 'ZEEUWS krabfilet', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 5.52, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '116', productId: '12356', name: 'ZEEUWS buikreepjes', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 4.95, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '117', productId: '12360', name: 'ZEEUWS magerlapjes', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.35, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '118', productId: '12361', name: 'ZEEUWS varkensfiletlapjes', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.85, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '119', productId: '12362', name: 'ZEEUWS schnitzel vers', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.80, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '120', productId: '12365', name: 'ZEEUWS kordon bleu vers', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.60, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '121', productId: '12370', name: 'ZEEUWS shoarmavlees', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.40, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '122', productId: '12371', name: 'ZEEUWS gyrosreepjes', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.45, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '123', productId: '12372', name: 'ZEEUWS speklapjes z/zw', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.25, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '124', productId: '12373', name: 'ZEEUWS speklapjes u/b', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.40, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '125', productId: '12375', name: 'ZEEUWS karbonade met rib', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.55, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '126', productId: '12376', name: 'ZEEUWS karbonade zonder rib', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.45, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '127', productId: '12380', name: 'ZEEUWS filetlapjes gemarineerd', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.10, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '128', productId: '12381', name: 'ZEEUWS speklapjes gemarineerd', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.00, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '129', productId: '12385', name: 'ZEEUWS satévlees', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.30, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '130', productId: '12386', name: 'ZEEUWS spare ribs gemarineerd', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.40, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '131', productId: '12387', name: 'ZEEUWS procureurlapjes gemarineerd', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.90, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '132', productId: '12390', name: 'ZEEUWS gehakt vers', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 5.95, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '133', productId: '12391', name: 'ZEEUWS gehakt half om half', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 5.70, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '134', productId: '12392', name: 'ZEEUWS gehakt mager', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.10, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '135', productId: '12400', name: 'ZEEUWS rollade gekruid', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.20, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '136', productId: '12401', name: 'ZEEUWS rollade ongekruid', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 7.00, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '137', productId: '12410', name: 'ZEEUWS spekblokjes', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.00, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '138', productId: '12415', name: 'ZEEUWS spekreepjes', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.20, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '139', productId: '12420', name: 'ZEEUWS slavinken', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.80, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '140', productId: '12425', name: 'ZEEUWS blinde vinken', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.90, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '141', productId: '12430', name: 'ZEEUWS saucijzen vers', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.40, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '142', productId: '12431', name: 'ZEEUWS braadworst vers', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.50, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '143', productId: '12432', name: 'ZEEUWS bbq worst', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.70, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '144', productId: '12433', name: 'ZEEUWS chipolata', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.60, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '145', productId: '12434', name: 'ZEEUWS boerenworst', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.80, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '146', productId: '12435', name: 'ZEEUWS hamburger vers', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.70, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '147', productId: '12440', name: 'ZEEUWS gehaktbal vers', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.80, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '148', productId: '12445', name: 'ZEEUWS worstjes gemengd', category: 'Pitmaster', meatType: 'Pork', weight: 1, costPrice: 6.75, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '149', productId: '64142', name: 'IERS Losse spier gevliesd 3-3.5', category: 'Pitmaster', meatType: 'Beef', weight: 3.2, costPrice: 15.45, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '150', productId: '64296', name: 'IERS Jodenhaas gevliesd', category: 'Pitmaster', meatType: 'Beef', weight: 1.0, costPrice: 18.80, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '151', productId: '64312', name: 'IERS Dikke rib', category: 'Pitmaster', meatType: 'Beef', weight: 6.0, costPrice: 13.80, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '152', productId: '64317', name: 'IERS Sucade', category: 'Pitmaster', meatType: 'Beef', weight: 2.5, costPrice: 15.55, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '153', productId: '64319', name: 'IERS Ribeye 2-3 kg', category: 'Pitmaster', meatType: 'Beef', weight: 2.5, costPrice: 41.00, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '154', productId: '64359', name: 'IERS Dunne lende PremiumB (in 2-en)', category: 'Pitmaster', meatType: 'Beef', weight: 8.0, costPrice: 29.70, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '155', productId: '64366', name: 'IERS Bavette', category: 'Pitmaster', meatType: 'Beef', weight: 1.0, costPrice: 17.25, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '156', productId: '64367', name: 'IERS Staartstuk', category: 'Pitmaster', meatType: 'Beef', weight: 1.0, costPrice: 21.10, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '157', productId: '64368', name: 'IERS Short rib', category: 'Pitmaster', meatType: 'Beef', weight: 2.5, costPrice: 14.30, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '158', productId: '64381', name: 'IERS R.haas z/k 2.7-3.2 kg', category: 'Pitmaster', meatType: 'Beef', weight: 3.0, costPrice: 40.50, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '159', productId: '64384', name: 'IERS Tomahawk', category: 'Pitmaster', meatType: 'Beef', weight: 1.3, costPrice: 26.70, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '160', productId: '64385', name: 'IERS Tomahawk z/k los verpakt', category: 'Pitmaster', meatType: 'Beef', weight: 1.05, costPrice: 28.25, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '161', productId: '64386', name: 'IERS Cote de boeuf Hereford', category: 'Pitmaster', meatType: 'Beef', weight: 1.5, costPrice: 25.50, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '162', productId: '64386', name: 'IERS Kogel bovenbil', category: 'Pitmaster', meatType: 'Beef', weight: 1.3, costPrice: 19.10, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '163', productId: '64262', name: 'IERS HIPHANG Kogel b.bil', category: 'Pitmaster', meatType: 'Beef', weight: 1.2, costPrice: 15.56, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '164', productId: '66801', name: 'Novillo Real Sucade [Uruguay]', category: 'Pitmaster', meatType: 'Beef', weight: 2.5, costPrice: 13.90, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '165', productId: '66803', name: 'Novillo Real Ribeye [Uruguay]', category: 'Pitmaster', meatType: 'Beef', weight: 4.2, costPrice: 34.95, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '166', productId: '66804', name: 'Novillo Real Dikke rib [Uruguay]', category: 'Pitmaster', meatType: 'Beef', weight: 4.5, costPrice: 14.95, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '167', productId: '66805', name: 'Novillo Real Flapmeat [Uruguay]', category: 'Pitmaster', meatType: 'Beef', weight: 1.4, costPrice: 21.30, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '168', productId: '66808', name: 'Novillo Real Dunne lende [Uruguay]', category: 'Pitmaster', meatType: 'Beef', weight: 4.0, costPrice: 29.30, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '169', productId: '66809', name: 'Novillo Real Staartstuk [Uruguay]', category: 'Pitmaster', meatType: 'Beef', weight: 2.5, costPrice: 23.75, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+  { id: '170', productId: '66810', name: 'Novillo Real Ezel met vet [Uruguay]', category: 'Pitmaster', meatType: 'Beef', weight: 1.0, costPrice: 16.95, wastePercentage: 10, prepTimeMinutes: 10, sellPrice: 10, margin: 0, units: 0, isActive: false },
+
+]);
 
   const [startupCosts, setStartupCosts] = useState<StartupCost[]>([
-    { id: '1', category: 'Equipment', item: 'Commercial Smokers (2x)', estimatedCost: 15000, actualCost: 15000, paid: true, notes: 'Offset & Pellet' },
-    { id: '2', category: 'Equipment', item: 'Display Cases', estimatedCost: 8000, actualCost: 8000, paid: false, notes: 'Refrigerated' },
-    { id: '3', category: 'Equipment', item: 'Prep Tables & Workstations', estimatedCost: 3000, actualCost: 3000, paid: false, notes: 'Stainless steel' },
-    { id: '4', category: 'Equipment', item: 'Point of Sale System', estimatedCost: 2500, actualCost: 2500, paid: false, notes: 'Hardware + software' },
-    { id: '5', category: 'Renovation', item: 'Kitchen Build-Out', estimatedCost: 25000, actualCost: 25000, paid: false, notes: 'Plumbing, electrical, ventilation' },
-    { id: '6', category: 'Renovation', item: 'Interior Design', estimatedCost: 8000, actualCost: 8000, paid: false, notes: 'Fixtures, lighting, seating' },
-    { id: '7', category: 'Legal & Admin', item: 'Business Registration', estimatedCost: 1500, actualCost: 1500, paid: false, notes: 'Permits, licenses' },
-    { id: '8', category: 'Legal & Admin', item: 'Insurance (First Year)', estimatedCost: 3600, actualCost: 3600, paid: false, notes: 'Liability, property' },
-    { id: '9', category: 'Marketing', item: 'Branding & Signage', estimatedCost: 4000, actualCost: 4000, paid: false, notes: 'Logo, exterior sign, menus' },
-    { id: '10', category: 'Marketing', item: 'Launch Campaign', estimatedCost: 3000, actualCost: 3000, paid: false, notes: 'Social media, flyers, opening event' },
-    { id: '11', category: 'Working Capital', item: 'Initial Inventory', estimatedCost: 8000, actualCost: 8000, paid: false, notes: 'First month meat stock' },
-    { id: '12', category: 'Working Capital', item: 'Cash Reserve', estimatedCost: 14040, actualCost: 14040, paid: false, notes: '2 months fixed costs buffer' },
-    { id: '13', category: 'Working Capital', item: 'Emergency Fund', estimatedCost: 5000, actualCost: 5000, paid: false, notes: 'Unexpected expenses' }
+    { id: '1', category: 'Store Renovation', item: 'Store Renovation', estimatedCost: 0, actualCost: 30000, paid: false, notes: '' },
+    { id: '2', category: 'Equipment', item: 'BBQ Equipment', estimatedCost: 0, actualCost: 5000, paid: false, notes: '' },
+    { id: '3', category: 'Content Production', item: 'Camera, Mic, etc', estimatedCost: 0, actualCost: 2500, paid: false, notes: '' },
+    { id: '4', category: 'Branding & Packaging', item: 'Logo Design, clothes, packaging, jars, prints', estimatedCost: 0, actualCost: 2500, paid: false, notes: '' },
+    { id: '5', category: 'Legal & Admin', item: 'Insurance, legal stuff, LLC Setup', estimatedCost: 0, actualCost: 2000, paid: false, notes: '' },
+    { id: '6', category: 'Inventory', item: 'Initial Inventory', estimatedCost: 0, actualCost: 5000, paid: false, notes: '' },
+    { id: '7', category: 'Marketing & Software', item: 'Photography, website dev, social m', estimatedCost: 0, actualCost: 10000, paid: false, notes: '' },
+    { id: '8', category: 'Miscellaneous', item: 'Overige kosten', estimatedCost: 0, actualCost: 3000, paid: false, notes: '' }
   ]);
 
   const [monthlyCosts, setMonthlyCosts] = useState<MonthlyCost[]>([
-    { id: '1', category: 'Rent & Utilities', item: 'Rent', monthlyCost: 3500, annualCost: 42000, type: 'Fixed', notes: 'Prime location' },
-    { id: '2', category: 'Rent & Utilities', item: 'Utilities', monthlyCost: 800, annualCost: 9600, type: 'Fixed', notes: 'Electric, gas, water' },
-    { id: '3', category: 'Labor', item: 'Head Pitmaster', monthlyCost: 3500, annualCost: 42000, type: 'Fixed', notes: 'Full-time' },
-    { id: '4', category: 'Labor', item: 'Assistant Chef', monthlyCost: 2500, annualCost: 30000, type: 'Fixed', notes: 'Full-time' },
-    { id: '5', category: 'Labor', item: 'Counter Staff (2x)', monthlyCost: 3600, annualCost: 43200, type: 'Fixed', notes: 'Part-time' },
-    { id: '6', category: 'Marketing', item: 'Social Media & Ads', monthlyCost: 500, annualCost: 6000, type: 'Variable', notes: 'Monthly campaigns' },
-    { id: '7', category: 'Operations', item: 'Insurance', monthlyCost: 300, annualCost: 3600, type: 'Fixed', notes: 'Monthly premium' },
-    { id: '8', category: 'Operations', item: 'Accounting & Legal', monthlyCost: 200, annualCost: 2400, type: 'Fixed', notes: 'Bookkeeping services' },
-    { id: '9', category: 'Operations', item: 'Point of Sale Software', monthlyCost: 140, annualCost: 1680, type: 'Fixed', notes: 'Monthly subscription' },
-    { id: '10', category: 'Supplies', item: 'Packaging Supplies', monthlyCost: 400, annualCost: 4800, type: 'Variable', notes: 'Boxes, wrapping, bags' },
-    { id: '11', category: 'Supplies', item: 'Cleaning Supplies', monthlyCost: 100, annualCost: 1200, type: 'Variable', notes: 'Sanitizers, paper products' },
-    { id: '12', category: 'Operations', item: 'Maintenance & Repairs', monthlyCost: 500, annualCost: 6000, type: 'Variable', notes: 'Equipment upkeep' }
+    { id: '1', category: 'Occupancy', item: 'Rent', monthlyCost: 1500, annualCost: 18000, type: 'Fixed', notes: '' },
+    { id: '2', category: 'Occupancy', item: 'Utilities (electric, water)', monthlyCost: 500, annualCost: 6000, type: 'Fixed', notes: '' },
+    { id: '3', category: 'Occupancy', item: 'Internet & Phone', monthlyCost: 100, annualCost: 1200, type: 'Fixed', notes: '' },
+    { id: '4', category: 'Occupancy', item: 'Insurance', monthlyCost: 150, annualCost: 1800, type: 'Fixed', notes: '' },
+    { id: '5', category: 'Labor', item: 'Kees Salary', monthlyCost: 3000, annualCost: 36000, type: 'Fixed', notes: '' },
+    { id: '6', category: 'Labor', item: 'Part-Time Help', monthlyCost: 2000, annualCost: 24000, type: 'Variable', notes: '' },
+    { id: '7', category: 'Labor', item: 'Team', monthlyCost: 0, annualCost: 0, type: 'Fixed', notes: '' },
+    { id: '8', category: 'Software & Tech', item: 'Shopify', monthlyCost: 79, annualCost: 948, type: 'Fixed', notes: '' },
+    { id: '9', category: 'Software & Tech', item: 'DomainName', monthlyCost: 40, annualCost: 480, type: 'Fixed', notes: '' },
+    { id: '10', category: 'Software & Tech', item: 'Framer', monthlyCost: 50, annualCost: 600, type: 'Fixed', notes: '' },
+    { id: '11', category: 'Software & Tech', item: 'Klaviyo', monthlyCost: 80, annualCost: 960, type: 'Variable', notes: '' },
+    { id: '12', category: 'Software & Tech', item: 'Smile.io (loyalty)', monthlyCost: 50, annualCost: 600, type: 'Fixed', notes: '' },
+    { id: '13', category: 'Software & Tech', item: 'Voiceflow', monthlyCost: 60, annualCost: 720, type: 'Fixed', notes: '' },
+    { id: '14', category: 'Software & Tech', item: 'Airtable', monthlyCost: 20, annualCost: 240, type: 'Fixed', notes: '' },
+    { id: '15', category: 'Software & Tech', item: 'Google Workspace', monthlyCost: 40, annualCost: 480, type: 'Fixed', notes: '' },
+    { id: '16', category: 'Software & Tech', item: 'Social Media Software', monthlyCost: 60, annualCost: 720, type: 'Fixed', notes: '' },
+    { id: '17', category: 'Marketing & Content', item: 'Social Media Ads', monthlyCost: 2000, annualCost: 24000, type: 'Variable', notes: '' },
+    { id: '18', category: 'Marketing & Content', item: 'Video/Content Editing', monthlyCost: 2000, annualCost: 24000, type: 'Fixed', notes: '' },
+    { id: '19', category: 'Packaging & Supplies', item: 'Boxes (per 100)', monthlyCost: 150, annualCost: 1800, type: 'Variable', notes: 'Geen idee' },
+    { id: '20', category: 'Software & Tech', item: 'AI costs', monthlyCost: 50, annualCost: 600, type: 'Variable', notes: '' },
+    { id: '21', category: 'Packaging & Supplies', item: 'Butcher paper & string (per 100)', monthlyCost: 50, annualCost: 600, type: 'Variable', notes: '' },
+    { id: '22', category: 'Packaging & Supplies', item: 'Recipe cards (printing, per 100)', monthlyCost: 50, annualCost: 600, type: 'Variable', notes: '' },
+    { id: '23', category: 'Packaging & Supplies', item: 'Spice jars & labels', monthlyCost: 150, annualCost: 1800, type: 'Variable', notes: '' },
+    { id: '24', category: 'Packaging & Supplies', item: 'Stickers & Branding (per 100)', monthlyCost: 150, annualCost: 1800, type: 'Variable', notes: '' },
+    { id: '25', category: 'Operations', item: 'Cleaning Supplies', monthlyCost: 50, annualCost: 600, type: 'Fixed', notes: '' },
+    { id: '26', category: 'Operations', item: 'Bags, gloves, aprons', monthlyCost: 40, annualCost: 480, type: 'Variable', notes: '' },
+    { id: '27', category: 'Operations', item: 'Maintenance & repairs', monthlyCost: 250, annualCost: 3000, type: 'Fixed', notes: '' },
+    { id: '28', category: 'Operations', item: 'Point of Sales Fees', monthlyCost: 0, annualCost: 0, type: 'Variable', notes: '???' },
+    { id: '29', category: 'Operations', item: 'Payment Processing', monthlyCost: 0, annualCost: 0, type: 'Variable', notes: 'x% of revenue' },
+    { id: '30', category: 'Marketing & Content', item: 'BBQ Supplies', monthlyCost: 500, annualCost: 6000, type: 'Variable', notes: '' }
   ]);
+
+  const [selectedProductFilter, setSelectedProductFilter] = useState<'all' | 'classic' | 'pitmaster'>('all');
+
+  // Labor capacity inputs
+  const [hoursPerDay, setHoursPerDay] = useState(5);
+  const [daysPerMonth, setDaysPerMonth] = useState(18);
+
+  // Seasonality multipliers (% of baseline)
+  const [seasonalMultipliers, setSeasonalMultipliers] = useState({
+    Jan: 70, Feb: 70, Mar: 85, Apr: 100, May: 120, Jun: 140,
+    Jul: 150, Aug: 145, Sep: 120, Oct: 100, Nov: 80, Dec: 90
+  });
 
   const addProduct = () => {
     const newProduct: Product = {
       id: Date.now().toString(),
+      productId: '',
       name: 'New Product',
       category: 'Classic',
       meatType: 'Beef',
-      weight: 0,
+      weight: 1,
       costPrice: 0,
       wastePercentage: 10,
-      prepTimeMinutes: 0,
+      prepTimeMinutes: 10,
       sellPrice: 0,
       margin: 0,
-      units: 0
+      units: 0,
+      isActive: false
     };
     setProducts([...products, newProduct]);
   };
 
   const updateProduct = (id: string, field: keyof Product, value: any) => {
     setProducts(products.map(p => {
-      if (p.id !== id) return p;
-      
-      const updated = { ...p, [field]: value };
-      
-      if (field === 'costPrice' || field === 'wastePercentage' || field === 'weight' || field === 'sellPrice' || field === 'units') {
+      if (p.id === id) {
+        const updated = { ...p, [field]: value };
+        
+        // Calculate true cost (includes waste)
         const trueCost = updated.costPrice / (1 - updated.wastePercentage / 100);
-        const totalCost = (trueCost * updated.weight);
-        updated.margin = updated.sellPrice - totalCost;
+        
+        // Calculate margin
+        updated.margin = updated.sellPrice - trueCost;
+        
+        return updated;
       }
-      
-      return updated;
+      return p;
     }));
   };
 
@@ -450,11 +681,35 @@ const BreakEvenAnalysis = () => {
     setProducts(products.filter(p => p.id !== id));
   };
 
+  const handleDragStart = (id: string) => {
+    setDraggedItem(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (draggedItem === null || draggedItem === id) return;
+
+    const draggedIndex = products.findIndex(p => p.id === draggedItem);
+    const targetIndex = products.findIndex(p => p.id === id);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    const newProducts = [...products];
+    const [removed] = newProducts.splice(draggedIndex, 1);
+    newProducts.splice(targetIndex, 0, removed);
+
+    setProducts(newProducts);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+  };
+
   const addStartupCost = () => {
     const newCost: StartupCost = {
       id: Date.now().toString(),
-      category: 'Other',
-      item: 'New Item',
+      category: '',
+      item: '',
       estimatedCost: 0,
       actualCost: 0,
       paid: false,
@@ -464,7 +719,9 @@ const BreakEvenAnalysis = () => {
   };
 
   const updateStartupCost = (id: string, field: keyof StartupCost, value: any) => {
-    setStartupCosts(startupCosts.map(c => c.id === id ? { ...c, [field]: value } : c));
+    setStartupCosts(startupCosts.map(c => 
+      c.id === id ? { ...c, [field]: value } : c
+    ));
   };
 
   const deleteStartupCost = (id: string) => {
@@ -474,8 +731,8 @@ const BreakEvenAnalysis = () => {
   const addMonthlyCost = () => {
     const newCost: MonthlyCost = {
       id: Date.now().toString(),
-      category: 'Other',
-      item: 'New Cost',
+      category: '',
+      item: '',
       monthlyCost: 0,
       annualCost: 0,
       type: 'Fixed',
@@ -486,12 +743,14 @@ const BreakEvenAnalysis = () => {
 
   const updateMonthlyCost = (id: string, field: keyof MonthlyCost, value: any) => {
     setMonthlyCosts(monthlyCosts.map(c => {
-      if (c.id !== id) return c;
-      const updated = { ...c, [field]: value };
-      if (field === 'monthlyCost') {
-        updated.annualCost = value * 12;
+      if (c.id === id) {
+        const updated = { ...c, [field]: value };
+        if (field === 'monthlyCost') {
+          updated.annualCost = value * 12;
+        }
+        return updated;
       }
-      return updated;
+      return c;
     }));
   };
 
@@ -499,31 +758,58 @@ const BreakEvenAnalysis = () => {
     setMonthlyCosts(monthlyCosts.filter(c => c.id !== id));
   };
 
+  const updateSeasonalMultiplier = (month: string, value: number) => {
+    setSeasonalMultipliers({
+      ...seasonalMultipliers,
+      [month]: value
+    });
+  };
+
+  const resetSeasonality = () => {
+    setSeasonalMultipliers({
+      Jan: 100, Feb: 100, Mar: 100, Apr: 100, May: 100, Jun: 100,
+      Jul: 100, Aug: 100, Sep: 100, Oct: 100, Nov: 100, Dec: 100
+    });
+  };
+
+  const applyBBQSeasonality = () => {
+    setSeasonalMultipliers({
+      Jan: 70, Feb: 70, Mar: 85, Apr: 100, May: 120, Jun: 140,
+      Jul: 150, Aug: 145, Sep: 120, Oct: 100, Nov: 80, Dec: 90
+    });
+  };
+
   const calculations = useMemo(() => {
-    const totalRevenue = products.reduce((sum, p) => sum + (p.sellPrice * p.units), 0);
-    const totalCost = products.reduce((sum, p) => {
+    const filteredProducts = products.filter(p => {
+      // Only include active products in calculations
+      if (!p.isActive) return false;
+      
+      if (selectedProductFilter === 'all') return true;
+      if (selectedProductFilter === 'classic') return p.category === 'Classic';
+      if (selectedProductFilter === 'pitmaster') return p.category === 'Pitmaster';
+      return true;
+    });
+
+    const totalRevenue = filteredProducts.reduce((sum, p) => sum + (p.sellPrice * p.units), 0);
+    const totalCost = filteredProducts.reduce((sum, p) => {
       const trueCost = p.costPrice / (1 - p.wastePercentage / 100);
-      return sum + (trueCost * p.weight * p.units);
+      return sum + (trueCost * p.units);
     }, 0);
     const totalMargin = totalRevenue - totalCost;
-    const totalUnits = products.reduce((sum, p) => sum + p.units, 0);
-    const totalKees = products.reduce((sum, p) => sum + (p.units * (p.units / totalUnits)), 0);
-    const totalPrepTime = products.reduce((sum, p) => sum + (p.prepTimeMinutes * p.units), 0);
 
-    // Classic vs Pitmaster breakdown
-    const classicProducts = products.filter(p => p.category === 'Classic');
-    const pitmasterProducts = products.filter(p => p.category === 'Pitmaster');
+    const classicProducts = filteredProducts.filter(p => p.category === 'Classic');
+    const pitmasterProducts = filteredProducts.filter(p => p.category === 'Pitmaster');
 
     const classicRevenue = classicProducts.reduce((sum, p) => sum + (p.sellPrice * p.units), 0);
     const pitmasterRevenue = pitmasterProducts.reduce((sum, p) => sum + (p.sellPrice * p.units), 0);
 
     const classicCost = classicProducts.reduce((sum, p) => {
       const trueCost = p.costPrice / (1 - p.wastePercentage / 100);
-      return sum + (trueCost * p.weight * p.units);
+      return sum + (trueCost * p.units);
     }, 0);
     const pitmasterCost = pitmasterProducts.reduce((sum, p) => {
       const trueCost = p.costPrice / (1 - p.wastePercentage / 100);
-      return sum + (trueCost * p.weight * p.units);
+      return sum + (trueCost * p.units);
     }, 0);
 
     const classicMargin = classicRevenue - classicCost;
@@ -535,7 +821,6 @@ const BreakEvenAnalysis = () => {
     const classicPrepTime = classicProducts.reduce((sum, p) => sum + (p.prepTimeMinutes * p.units), 0);
     const pitmasterPrepTime = pitmasterProducts.reduce((sum, p) => sum + (p.prepTimeMinutes * p.units), 0);
 
-    const avgMarginPerUnit = totalUnits > 0 ? totalMargin / totalUnits : 0;
     const classicAvgMargin = classicUnits > 0 ? classicMargin / classicUnits : 0;
     const pitmasterAvgMargin = pitmasterUnits > 0 ? pitmasterMargin / pitmasterUnits : 0;
 
@@ -543,10 +828,6 @@ const BreakEvenAnalysis = () => {
       totalRevenue,
       totalCost,
       totalMargin,
-      totalUnits,
-      totalKees,
-      totalPrepTime,
-      avgMarginPerUnit,
       classicRevenue,
       pitmasterRevenue,
       classicCost,
@@ -560,155 +841,366 @@ const BreakEvenAnalysis = () => {
       classicAvgMargin,
       pitmasterAvgMargin
     };
-  }, [products]);
+  }, [products, selectedProductFilter]);
 
-  const totalMonthlyOpex = monthlyCosts.reduce((sum, c) => sum + c.monthlyCost, 0);
-  const totalStartupCost = startupCosts.reduce((sum, c) => sum + c.actualCost, 0);
-  const totalPaid = startupCosts.filter(c => c.paid).reduce((sum, c) => sum + c.actualCost, 0);
+  const totalStartupCosts = startupCosts.reduce((sum, cost) => sum + cost.actualCost, 0);
+  const paidStartupCosts = startupCosts.filter(c => c.paid).reduce((sum, cost) => sum + cost.actualCost, 0);
+  const unpaidStartupCosts = totalStartupCosts - paidStartupCosts;
 
-  // Calculate total operating expenses (Opex + COGS)
+  const totalMonthlyOpex = monthlyCosts.reduce((sum, cost) => sum + cost.monthlyCost, 0);
   const totalOperatingExpenses = totalMonthlyOpex + calculations.totalCost;
-  const netProfit = calculations.totalRevenue - totalOperatingExpenses;
-
-  const breakEvenUnits = totalMonthlyOpex > 0 && calculations.avgMarginPerUnit > 0
-    ? Math.ceil(totalMonthlyOpex / calculations.avgMarginPerUnit)
-    : 0;
+  const monthlyNetProfit = calculations.totalRevenue - totalOperatingExpenses;
 
   // Labor capacity calculations
-  const availableMinutesPerMonth = hoursPerDay * 60 * daysPerMonth;
-  const usedMinutes = calculations.totalPrepTime;
-  const remainingMinutes = availableMinutesPerMonth - usedMinutes;
-  const utilizationPercentage = availableMinutesPerMonth > 0 ? (usedMinutes / availableMinutesPerMonth) * 100 : 0;
+  const totalMonthlyMinutes = hoursPerDay * 60 * daysPerMonth;
+  const totalPrepTime = products.reduce((sum, p) => sum + (p.prepTimeMinutes * p.units), 0);
+  const remainingCapacity = totalMonthlyMinutes - totalPrepTime;
+  const utilizationPercent = totalMonthlyMinutes > 0 ? (totalPrepTime / totalMonthlyMinutes) * 100 : 0;
 
-  // Startup cost recovery
-  const monthsToRecoverStartup = netProfit > 0 ? totalStartupCost / netProfit : 0;
+  // Break-even calculations
+  const marginPercent = totalMonthlyOpex > 0 ? (calculations.totalMargin / totalMonthlyOpex) * 100 : 0;
+  const isProfitable = monthlyNetProfit >= 0;
 
-  // Seasonality calculations
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const monthKeys: (keyof typeof seasonalityMultipliers)[] = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-  
-  const seasonalData = monthKeys.map((key, index) => {
-    const multiplier = seasonalityMultipliers[key] / 100;
-    const monthlyRevenue = calculations.totalRevenue * multiplier;
-    const monthlyCost = calculations.totalCost * multiplier;
-    const monthlyMargin = monthlyRevenue - monthlyCost;
-    const monthlyNetProfit = monthlyMargin - totalMonthlyOpex;
+  // Calculate monthly performance with seasonality
+  const monthlyData = Object.entries(seasonalMultipliers).map(([month, multiplier]) => {
+    const monthRevenue = (calculations.totalRevenue * multiplier) / 100;
+    const monthCOGS = (calculations.totalCost * multiplier) / 100;
+    const monthGrossMargin = monthRevenue - monthCOGS;
+    const monthOperatingExpenses = totalMonthlyOpex;
+    const monthNetProfit = monthGrossMargin - monthOperatingExpenses;
     
     return {
-      month: monthNames[index],
-      multiplier: seasonalityMultipliers[key],
-      revenue: monthlyRevenue,
-      cost: monthlyCost,
-      margin: monthlyMargin,
-      opex: totalMonthlyOpex,
-      netProfit: monthlyNetProfit,
-      utilization: utilizationPercentage * multiplier
+      month,
+      multiplier,
+      revenue: monthRevenue,
+      cogs: monthCOGS,
+      grossMargin: monthGrossMargin,
+      operatingExpenses: monthOperatingExpenses,
+      netProfit: monthNetProfit,
+      capacityUsed: (utilizationPercent * multiplier) / 100
     };
   });
 
-  const annualRevenue = seasonalData.reduce((sum, m) => sum + m.revenue, 0);
-  const annualCost = seasonalData.reduce((sum, m) => sum + m.cost, 0);
-  const annualMargin = seasonalData.reduce((sum, m) => sum + m.margin, 0);
-  const annualOpex = totalMonthlyOpex * 12;
-  const annualNetProfit = annualMargin - annualOpex;
-  const avgMonthlyNetProfit = annualNetProfit / 12;
+  const annualRevenue = monthlyData.reduce((sum, m) => sum + m.revenue, 0);
+  const annualNetProfit = monthlyData.reduce((sum, m) => sum + m.netProfit, 0);
+  const avgMonthlyProfit = annualNetProfit / 12;
 
-  const bestMonth = seasonalData.reduce((best, current) => 
+  const bestMonth = monthlyData.reduce((best, current) => 
     current.netProfit > best.netProfit ? current : best
-  );
-  const worstMonth = seasonalData.reduce((worst, current) => 
-    current.netProfit < worst.netProfit ? current : worst
-  );
+  , monthlyData[0]);
 
-  // 24-month projection data with seasonality
-  const projectionData: Array<{month: number; cumulativeProfit: number; breakEven: number}> = [];
-  let cumulativeProfit = 0;
+  const worstMonth = monthlyData.reduce((worst, current) => 
+    current.netProfit < worst.netProfit ? current : worst
+  , monthlyData[0]);
+
+  // Cash reserve calculation
+  const sortedMonths = [...monthlyData].sort((a, b) => a.netProfit - b.netProfit);
+  const threeWorstMonths = sortedMonths.slice(0, 3);
+  const cashReserveNeeded = Math.abs(threeWorstMonths.reduce((sum, m) => sum + Math.min(0, m.netProfit), 0));
+
+  // 24-month projection with fixed cumulative profit calculation
+  const projectionData = [];
+  let cumulativeProfit = -totalStartupCosts; // Start with negative startup costs
   
-  for (let i = 0; i < 25; i++) {
-    const monthIndex = i % 12;
-    const yearMultiplier = i < 12 ? 0.8 : 1; // Year 1: 80% ramp-up, Year 2: 100%
-    const seasonalProfit = seasonalData[monthIndex].netProfit * yearMultiplier;
-    
-    if (i > 0) {
-      cumulativeProfit += seasonalProfit;
+  for (let month = 0; month <= 24; month++) {
+    // For month 0, don't add any profit yet - just show the startup cost hole
+    if (month === 0) {
+      projectionData.push({
+        month,
+        monthName: 'Start',
+        netProfit: 0,
+        cumulativeProfit: cumulativeProfit,
+        breakEven: 0
+      });
+      continue;
     }
     
+    const monthIndex = (month - 1) % 12;
+    const monthName = Object.keys(seasonalMultipliers)[monthIndex];
+    const multiplier = Object.values(seasonalMultipliers)[monthIndex];
+    
+    const monthRevenue = (calculations.totalRevenue * multiplier) / 100;
+    const monthCOGS = (calculations.totalCost * multiplier) / 100;
+    const monthGrossMargin = monthRevenue - monthCOGS;
+    const monthNetProfit = monthGrossMargin - totalMonthlyOpex;
+    
+    cumulativeProfit += monthNetProfit; // Add each month's net profit to cumulative
+    
     projectionData.push({
-      month: i,
-      cumulativeProfit,
-      breakEven: 0
+      month,
+      monthName,
+      netProfit: monthNetProfit,
+      cumulativeProfit: cumulativeProfit,
+      breakEven: 0 // This is the break-even line at 0
     });
   }
 
-  // Filter products based on category filter
-  const filteredProducts = products.filter(p => 
-    categoryFilter === 'all' ? true : p.category === categoryFilter
+  // Product performance metrics
+  const productMetrics = products
+    .filter(p => p.isActive)  // Only include active products
+    .map(p => {
+    const trueCost = p.costPrice / (1 - p.wastePercentage / 100);
+    const marginPerUnit = p.sellPrice - trueCost;
+    const unitsPerHour = p.prepTimeMinutes > 0 ? 60 / p.prepTimeMinutes : 0;
+    const euroPerMinute = p.prepTimeMinutes > 0 ? marginPerUnit / p.prepTimeMinutes : 0;
+    const hourlyProfitPotential = unitsPerHour * marginPerUnit;
+    const monthlySalesPotential = (totalMonthlyMinutes / p.prepTimeMinutes) * marginPerUnit;
+    const totalMarginContribution = marginPerUnit * p.units;
+
+    return {
+      ...p,
+      trueCost,
+      marginPerUnit,
+      unitsPerHour,
+      euroPerMinute,
+      hourlyProfitPotential,
+      monthlySalesPotential,
+      totalMarginContribution
+    };
+  }).sort((a, b) => b.marginPerUnit - a.marginPerUnit);
+
+  const productEfficiencyRanking = [...productMetrics].sort((a, b) => b.euroPerMinute - a.euroPerMinute);
+  const topMarginProducts = [...productMetrics].sort((a, b) => b.totalMarginContribution - a.totalMarginContribution).slice(0, 10);
+
+  // Eye icon SVG component
+  const EyeIcon = ({ isOpen }: { isOpen: boolean }) => (
+    <svg 
+      width="24" 
+      height="24" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+      style={{ color: '#587C74' }}
+    >
+      {isOpen ? (
+        <>
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </>
+      ) : (
+        <>
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+        </>
+      )}
+    </svg>
   );
 
-  // Product efficiency ranking with throughput analysis
-  const productEfficiency = products.map(p => {
-    const euroPerMinute = p.prepTimeMinutes > 0 ? p.margin / p.prepTimeMinutes : 0;
-    const unitsPerHour = p.prepTimeMinutes > 0 ? 60 / p.prepTimeMinutes : 0;
-    const euroPerHour = euroPerMinute * 60;
-    const maxMonthlySales = p.prepTimeMinutes > 0 ? Math.floor(availableMinutesPerMonth / p.prepTimeMinutes) : 0;
-    const monthlyRevenuePotential = maxMonthlySales * p.margin;
+  // Info icon component with tooltip
+  const InfoIcon = ({ id, text }: { id: string; text: string }) => (
+    <div
+      style={styles.infoIcon}
+      onMouseEnter={() => setHoveredTooltip(id)}
+      onMouseLeave={() => setHoveredTooltip(null)}
+    >
+      i
+      {hoveredTooltip === id && (
+        <div style={styles.tooltip}>
+          {text}
+          <div style={styles.tooltipArrow} />
+        </div>
+      )}
+    </div>
+  );
+
+  // PDF Export Function
+  const exportToPDF = async () => {
+    if (!contentRef.current) return;
     
-    return {
-      name: p.name,
-      category: p.category,
-      margin: p.margin,
-      euroPerMinute,
-      euroPerHour,
-      unitsPerHour,
-      prepTime: p.prepTimeMinutes,
-      currentUnits: p.units,
-      maxMonthlySales,
-      monthlyRevenuePotential,
-      totalMarginContribution: p.margin * p.units
-    };
-  }).sort((a, b) => b.euroPerMinute - a.euroPerMinute);
-
-  // Top products by total margin contribution
-  const topProductsByMargin = [...productEfficiency]
-    .sort((a, b) => b.totalMarginContribution - a.totalMarginContribution)
-    .slice(0, 10);
-
-  // Dynamic comparison chart data
-  const comparisonChartData = products.map(p => {
-    const euroPerMinute = p.prepTimeMinutes > 0 ? p.margin / p.prepTimeMinutes : 0;
-    const euroPerHour = euroPerMinute * 60;
-    const unitsPerHour = p.prepTimeMinutes > 0 ? 60 / p.prepTimeMinutes : 0;
-    const hourlyRevenuePotential = unitsPerHour * p.margin;
-    const monthlySalesPotential = hourlyRevenuePotential * hoursPerDay * daysPerMonth;
-
-    return {
-      name: p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name,
-      fullName: p.name,
-      category: p.category,
-      margin: p.margin,
-      unitsPerHour: parseFloat(unitsPerHour.toFixed(2)),
-      hourlyPotential: parseFloat(hourlyRevenuePotential.toFixed(2)),
-      monthlySalesPotential: parseFloat(monthlySalesPotential.toFixed(2)),
-      currentUnits: p.units
-    };
-  }).sort((a, b) => b.hourlyPotential - a.hourlyPotential);
+    setIsExportingPDF(true);
+    
+    try {
+      // Store original tab and show all tabs content
+      const originalTab = activeTab;
+      
+      // Create a temporary container for all content
+      const tempContainer = document.createElement('div');
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '0';
+      tempContainer.style.width = '1400px';
+      tempContainer.style.backgroundColor = '#fff';
+      document.body.appendChild(tempContainer);
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const margin = 10;
+      const contentWidth = pageWidth - (2 * margin);
+      let currentY = margin;
+      
+      // Add title page
+      pdf.setFontSize(24);
+      pdf.setTextColor(47, 62, 70); // #2F3E46
+      pdf.text('Verbree Butchery - Business Analysis', pageWidth / 2, 30, { align: 'center' });
+      
+      pdf.setFontSize(12);
+      pdf.setTextColor(40, 40, 40);
+      pdf.text('Break-even analysis and financial planning dashboard', pageWidth / 2, 40, { align: 'center' });
+      
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(`Generated on: ${new Date().toLocaleDateString('nl-NL')}`, pageWidth / 2, 50, { align: 'center' });
+      
+      currentY = 70;
+      
+      // Helper function to add section
+      const addSection = async (element: HTMLElement, title: string) => {
+        const canvas = await html2canvas(element, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = contentWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        
+        // Check if we need a new page
+        if (currentY + imgHeight > pageHeight - margin) {
+          pdf.addPage();
+          currentY = margin;
+        }
+        
+        // Add section title
+        if (title) {
+          pdf.setFontSize(14);
+          pdf.setTextColor(47, 62, 70);
+          pdf.text(title, margin, currentY);
+          currentY += 8;
+        }
+        
+        pdf.addImage(imgData, 'PNG', margin, currentY, imgWidth, imgHeight);
+        currentY += imgHeight + 10;
+      };
+      
+      // Temporarily show all panels
+      setShowBreakEvenStatus(true);
+      setShowProfitProjection(true);
+      setShowLaborCapacity(true);
+      setShowSeasonality(true);
+      setShowProductPerformance(true);
+      setShowProductEfficiency(true);
+      setShowMarginContribution(true);
+      setShowClassicVsPitmaster(true);
+      setShowSalesVolumeInput(true);
+      
+      // Wait for render
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Capture Break-Even Analysis tab
+      setActiveTab('break-even');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const sections = contentRef.current.querySelectorAll('[data-section]');
+      for (let i = 0; i < sections.length; i++) {
+        const section = sections[i] as HTMLElement;
+        const sectionTitle = section.getAttribute('data-section-title') || '';
+        await addSection(section, sectionTitle);
+      }
+      
+      // Capture Startup Costs tab
+      pdf.addPage();
+      currentY = margin;
+      pdf.setFontSize(18);
+      pdf.setTextColor(47, 62, 70);
+      pdf.text('Startup Costs', margin, currentY);
+      currentY += 15;
+      
+      setActiveTab('startup');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const startupSections = contentRef.current.querySelectorAll('[data-section]');
+      for (let i = 0; i < startupSections.length; i++) {
+        const section = startupSections[i] as HTMLElement;
+        await addSection(section, '');
+      }
+      
+      // Capture Monthly Operating Costs tab
+      pdf.addPage();
+      currentY = margin;
+      pdf.setFontSize(18);
+      pdf.setTextColor(47, 62, 70);
+      pdf.text('Monthly Operating Costs', margin, currentY);
+      currentY += 15;
+      
+      setActiveTab('monthly');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const monthlySections = contentRef.current.querySelectorAll('[data-section]');
+      for (let i = 0; i < monthlySections.length; i++) {
+        const section = monthlySections[i] as HTMLElement;
+        await addSection(section, '');
+      }
+      
+      // Clean up
+      document.body.removeChild(tempContainer);
+      
+      // Restore original tab
+      setActiveTab(originalTab);
+      
+      // Save PDF
+      pdf.save('Verbree-Butchery-Analysis.pdf');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('There was an error generating the PDF. Please try again.');
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <div style={styles.headerContent}>
-          <h1 style={styles.title}>Verbree Butchery - Business Analysis</h1>
-          <p style={styles.subtitle}>Break-even analysis and financial planning dashboard</p>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            <div>
+              <h1 style={styles.title}>Verbree Butchery - Business Analysis</h1>
+              <p style={styles.subtitle}>Break-even analysis and financial planning dashboard</p>
+            </div>
+            <button
+              onClick={exportToPDF}
+              disabled={isExportingPDF}
+              onMouseEnter={() => setHoveredButton('export-pdf')}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: hoveredButton === 'export-pdf' ? '#476963' : '#587C74',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: isExportingPDF ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s',
+                opacity: isExportingPDF ? 0.6 : 1
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              {isExportingPDF ? 'Generating PDF...' : 'Export to PDF'}
+            </button>
+          </div>
         </div>
       </div>
 
       <div style={styles.tabsContainer}>
         <div style={styles.tabsWrapper}>
           <button
-            onClick={() => setActiveTab('breakeven')}
+            onClick={() => setActiveTab('break-even')}
             style={{
               ...styles.tab,
-              ...(activeTab === 'breakeven' ? styles.tabActive : {})
+              ...(activeTab === 'break-even' ? styles.tabActive : {})
             }}
           >
             Break-Even Analysis
@@ -734,11 +1226,11 @@ const BreakEvenAnalysis = () => {
         </div>
       </div>
 
-      <div style={styles.content}>
-        {activeTab === 'breakeven' && (
-          <>
-            {/* Key Performance Metrics */}
-            <div style={styles.metricsGrid}>
+      <div ref={contentRef} style={styles.content}>
+        {activeTab === 'break-even' && (
+          <div>
+            {/* Top Metrics Panel - Added Startup Costs */}
+            <div data-section data-section-title="Financial Overview" style={styles.metricsGrid}>
               <div style={styles.metricCard}>
                 <div style={styles.metricLabel}>Monthly Revenue</div>
                 <div style={{...styles.metricValue, color: '#587C74'}}>
@@ -750,8 +1242,8 @@ const BreakEvenAnalysis = () => {
                 <div style={{...styles.metricValue, color: '#587C74'}}>
                   €{calculations.totalMargin.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
                 </div>
-                <div style={{fontSize: '12px', color: '#666', marginTop: '4px'}}>
-                  (includes waste/packaging)
+                <div style={{fontSize: '12px', color: '#282828', marginTop: '4px'}}>
+                  (Includes waste/packaging)
                 </div>
               </div>
               <div style={styles.metricCard}>
@@ -762,1499 +1254,1623 @@ const BreakEvenAnalysis = () => {
               </div>
               <div style={styles.metricCard}>
                 <div style={styles.metricLabel}>Monthly Net Profit</div>
-                <div style={{...styles.metricValue, color: netProfit >= 0 ? '#587C74' : '#BB463C'}}>
-                  €{netProfit.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                <div style={{...styles.metricValue, color: monthlyNetProfit >= 0 ? '#587C74' : '#BB463C'}}>
+                  €{monthlyNetProfit.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                </div>
+              </div>
+              <div style={styles.metricCard}>
+                <div style={styles.metricLabel}>One-Time Startup Costs</div>
+                <div style={{...styles.metricValue, color: '#2F3E46'}}>
+                  €{totalStartupCosts.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                </div>
+                <div style={{fontSize: '12px', color: unpaidStartupCosts > 0 ? '#BB463C' : '#587C74', marginTop: '4px'}}>
+                  {unpaidStartupCosts > 0 ? `€${unpaidStartupCosts.toFixed(2)} unpaid` : 'All paid'}
                 </div>
               </div>
             </div>
 
-            {/* Break-Even Status */}
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>Break-Even Status</h2>
-              <div style={{display: 'flex', alignItems: 'center', gap: '16px', marginTop: '16px', marginBottom: '16px'}}>
-                <span style={{fontSize: '16px', fontWeight: '500'}}>Monthly Break-Even Point:</span>
-                <span style={{
-                  ...styles.statusBadge,
-                  backgroundColor: netProfit >= 0 ? '#e8f4f1' : '#ffe5e5',
-                  color: netProfit >= 0 ? '#587C74' : '#BB463C',
-                  fontSize: '16px'
-                }}>
-                  {netProfit >= 0 ? '✓ PROFITABLE' : '✗ UNPROFITABLE'}
-                </span>
+            {/* Break-Even Status Panel with Eye Icon */}
+            <div data-section data-section-title="Break-Even Analysis" style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
+                  Break-Even Status
+                  <InfoIcon id="panel-breakeven" text="Shows if your monthly revenue covers all operating expenses. Profitable = margin exceeds 100% of expenses. Track this to know if you're making or losing money each month." />
+                </h2>
+                <button
+                  onMouseEnter={() => setHoveredEye('breakeven')}
+                  onMouseLeave={() => setHoveredEye(null)}
+                  onClick={() => setShowBreakEvenStatus(!showBreakEvenStatus)}
+                  style={{
+                    ...styles.eyeButton,
+                    ...(hoveredEye === 'breakeven' ? styles.eyeButtonHover : {})
+                  }}
+                >
+                  <EyeIcon isOpen={showBreakEvenStatus} />
+                </button>
               </div>
               
-              <div style={{fontSize: '16px', color: '#282828', marginBottom: '16px'}}>
-                Current margin covers <strong>{((calculations.totalMargin / totalMonthlyOpex) * 100).toFixed(1)}%</strong> of operating expenses
-              </div>
-
-              {/* Progress bar */}
-              <div style={{marginBottom: '16px'}}>
-                <div style={{fontSize: '14px', marginBottom: '8px', color: '#666'}}>
-                  Margin vs Operating Expenses
-                </div>
-                <div style={styles.progressBar}>
-                  <div style={{
-                    width: `${Math.min((calculations.totalMargin / totalMonthlyOpex) * 100, 100)}%`,
-                    height: '100%',
-                    backgroundColor: calculations.totalMargin >= totalMonthlyOpex ? '#587C74' : '#BB463C',
-                    transition: 'width 0.3s ease'
-                  }} />
-                </div>
-              </div>
-
-              <div style={{
-                ...styles.infoBox,
-                backgroundColor: '#e8f0f4',
-                borderLeft: '4px solid #2F3E46'
-              }}>
-                <p style={{margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#2F3E46'}}>
-                  Startup Cost Recovery: {monthsToRecoverStartup > 0 
-                    ? `${monthsToRecoverStartup.toFixed(1)} months (${(monthsToRecoverStartup / 12).toFixed(1)} years) to recover €${totalStartupCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})} investment`
-                    : 'Not yet profitable - cannot recover startup costs'}
-                </p>
-              </div>
-            </div>
-
-            {/* 24-Month Profit Projection */}
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>24-Month Profit Projection</h2>
-              <ResponsiveContainer width="100%" height={350}>
-                <LineChart data={projectionData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="month" 
-                    label={{ value: 'Months', position: 'insideBottom', offset: -5 }}
-                  />
-                  <YAxis 
-                    label={{ value: 'Cumulative Profit (€)', angle: -90, position: 'insideLeft' }}
-                  />
-                  <Tooltip 
-                    formatter={(value: number) => `€${value.toLocaleString('nl-NL', {minimumFractionDigits: 2})}`}
-                  />
-                  <Legend />
-                  <Line 
-                    type="monotone" 
-                    dataKey="breakEven" 
-                    stroke="#999" 
-                    strokeDasharray="5 5" 
-                    name="Break-Even Line"
-                    dot={false}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="cumulativeProfit" 
-                    stroke="#587C74" 
-                    strokeWidth={2}
-                    name="Cumulative Profit"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Labor Capacity Analysis (Kees Units) */}
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>⏱️ Labor Capacity Analysis (Kees Units)</h2>
-              
-              <div style={{
-                ...styles.infoBox,
-                backgroundColor: '#e8f4f1',
-                borderLeft: '4px solid #587C74',
-                marginTop: '16px',
-                marginBottom: '24px'
-              }}>
-                <p style={{margin: 0, fontSize: '14px', color: '#282828'}}>
-                  💡 <strong>What are Kees Units?</strong> 1 Kees Unit = 1 minute of butcher labor. 
-                  This shows if your sales plan is realistic given available prep time.
-                </p>
-              </div>
-
-              <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px'}}>
-                <div>
-                  <label style={{display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px'}}>
-                    Hours per Day:
-                  </label>
-                  <input
-                    type="number"
-                    value={hoursPerDay}
-                    onChange={(e) => setHoursPerDay(parseFloat(e.target.value) || 0)}
-                    style={{...styles.input, width: '100px'}}
-                    min="0"
-                    step="0.5"
-                  />
-                </div>
-                <div>
-                  <label style={{display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px'}}>
-                    Days per Month:
-                  </label>
-                  <input
-                    type="number"
-                    value={daysPerMonth}
-                    onChange={(e) => setDaysPerMonth(parseInt(e.target.value) || 0)}
-                    style={{...styles.input, width: '100px'}}
-                    min="0"
-                    step="1"
-                  />
-                </div>
-              </div>
-
-              <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '16px'}}>
-                <div style={{
-                  ...styles.infoBox,
-                  backgroundColor: '#e8f4f1',
-                  borderLeft: '4px solid #2F3E46',
-                  margin: 0
-                }}>
-                  <div style={{fontSize: '14px', color: '#666', marginBottom: '4px'}}>Available</div>
-                  <div style={{fontSize: '28px', fontWeight: 'bold', color: '#2F3E46'}}>
-                    {availableMinutesPerMonth.toLocaleString()} min
+              {showBreakEvenStatus && (
+                <>
+                  <div style={{display: 'flex', alignItems: 'center', marginBottom: '16px'}}>
+                    <span style={{fontWeight: '600', marginRight: '8px'}}>Monthly Break-Even Point:</span>
+                    <span style={{
+                      ...styles.statusBadge,
+                      backgroundColor: isProfitable ? '#e8f4f1' : '#ffe5e5',
+                      color: isProfitable ? '#587C74' : '#BB463C'
+                    }}>
+                      {isProfitable ? '✓ PROFITABLE' : '✕ UNPROFITABLE'}
+                    </span>
                   </div>
-                </div>
-                
-                <div style={{
-                  ...styles.infoBox,
-                  backgroundColor: '#ffe5e5',
-                  borderLeft: '4px solid #BB463C',
-                  margin: 0
-                }}>
-                  <div style={{fontSize: '14px', color: '#666', marginBottom: '4px'}}>Used</div>
-                  <div style={{fontSize: '28px', fontWeight: 'bold', color: '#BB463C'}}>
-                    {usedMinutes.toLocaleString()} min
-                  </div>
-                </div>
-                
-                <div style={{
-                  ...styles.infoBox,
-                  backgroundColor: remainingMinutes < 0 ? '#ffe5e5' : '#e8f4f1',
-                  borderLeft: `4px solid ${remainingMinutes < 0 ? '#BB463C' : '#587C74'}`,
-                  margin: 0
-                }}>
-                  <div style={{fontSize: '14px', color: '#666', marginBottom: '4px'}}>Remaining</div>
-                  <div style={{fontSize: '28px', fontWeight: 'bold', color: remainingMinutes < 0 ? '#BB463C' : '#587C74'}}>
-                    {remainingMinutes.toLocaleString()} min
-                  </div>
-                </div>
-                
-                <div style={{
-                  ...styles.infoBox,
-                  backgroundColor: utilizationPercentage > 100 ? '#ffe5e5' : '#e8f4f1',
-                  borderLeft: `4px solid ${utilizationPercentage > 100 ? '#BB463C' : '#587C74'}`,
-                  margin: 0
-                }}>
-                  <div style={{fontSize: '14px', color: '#666', marginBottom: '4px'}}>Utilization</div>
-                  <div style={{fontSize: '28px', fontWeight: 'bold', color: utilizationPercentage > 100 ? '#BB463C' : '#587C74'}}>
-                    {utilizationPercentage.toFixed(1)}%
-                  </div>
-                  {utilizationPercentage > 100 && (
-                    <div style={{fontSize: '12px', color: '#BB463C', marginTop: '4px'}}>
-                      ✗ IMPOSSIBLE
-                    </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Progress bar */}
-              <div style={styles.progressBar}>
-                <div style={{
-                  width: `${Math.min(utilizationPercentage, 100)}%`,
-                  height: '100%',
-                  backgroundColor: utilizationPercentage > 100 ? '#BB463C' : utilizationPercentage > 80 ? '#F2CC8F' : '#587C74',
-                  transition: 'width 0.3s ease'
-                }} />
-              </div>
-
-              {utilizationPercentage > 100 && (
-                <div style={{
-                  ...styles.infoBox,
-                  backgroundColor: '#ffe5e5',
-                  borderLeft: '4px solid #BB463C',
-                  marginTop: '16px'
-                }}>
-                  <p style={{margin: 0, fontSize: '14px', color: '#282828'}}>
-                    ⚠️ <strong>WARNING:</strong> You're planning to sell more than Kees can physically prepare! 
-                    Reduce sales volumes by {((utilizationPercentage - 100) / utilizationPercentage * 100).toFixed(0)}% or hire help.
+                  <p style={{fontSize: '16px', marginBottom: '8px'}}>
+                    Current margin covers <strong>{marginPercent.toFixed(1)}%</strong> of monthly operating expenses
                   </p>
-                </div>
+
+                  <div style={{marginTop: '16px'}}>
+                    <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Margin vs Monthly Operating Expenses</div>
+                    <div style={styles.progressBar}>
+                      <div style={{
+                        ...styles.progressFill,
+                        width: `${Math.min(Math.abs(marginPercent), 100)}%`,
+                        backgroundColor: isProfitable ? '#587C74' : '#BB463C'
+                      }}>
+                        {Math.abs(marginPercent).toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    ...styles.infoBox,
+                    backgroundColor: isProfitable ? '#e8f4f1' : '#ffe5e5',
+                    borderLeft: isProfitable ? '4px solid #587C74' : '4px solid #BB463C',
+                    marginTop: '16px'
+                  }}>
+                    <strong>Startup Cost Recovery:</strong> {isProfitable 
+                      ? 'Not yet profitable - cannot recover startup costs' 
+                      : 'Not yet profitable - cannot recover startup costs'}
+                  </div>
+                </>
               )}
             </div>
 
-            {/* Seasonality Analysis */}
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>📅 Seasonality & Annual Performance</h2>
+            {/* 24-Month Profit Projection Panel with Eye Icon - FIXED */}
+            <div data-section data-section-title="24-Month Profit Projection" style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
+                  24-Month Profit Projection
+                  <InfoIcon id="panel-projection" text="Shows cumulative profit over 2 years starting from negative startup costs. When the line crosses €0 (break-even line), you've recovered your investment and start making money." />
+                </h2>
+                <button
+                  onMouseEnter={() => setHoveredEye('projection')}
+                  onMouseLeave={() => setHoveredEye(null)}
+                  onClick={() => setShowProfitProjection(!showProfitProjection)}
+                  style={{
+                    ...styles.eyeButton,
+                    ...(hoveredEye === 'projection' ? styles.eyeButtonHover : {})
+                  }}
+                >
+                  <EyeIcon isOpen={showProfitProjection} />
+                </button>
+              </div>
               
-              <div style={{
-                ...styles.infoBox,
-                backgroundColor: '#fff3cd',
-                borderLeft: '4px solid #F2CC8F',
-                marginTop: '16px',
-                marginBottom: '24px'
-              }}>
-                <p style={{margin: 0, fontSize: '14px', color: '#282828'}}>
-                  💡 <strong>Why This Matters:</strong> BBQ demand fluctuates by season. Summer is peak (BBQ season), 
-                  winter is slower. These multipliers let you model realistic monthly variations from your baseline sales.
-                  Set 100% = baseline (current product volumes), then adjust each month up or down.
-                </p>
-              </div>
-
-              {/* Annual Summary Cards */}
-              <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px'}}>
-                <div style={{...styles.metricCard, padding: '16px'}}>
-                  <div style={{fontSize: '12px', color: '#666', marginBottom: '4px'}}>Annual Revenue</div>
-                  <div style={{fontSize: '24px', fontWeight: 'bold', color: '#587C74'}}>
-                    €{annualRevenue.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                  </div>
-                </div>
-                
-                <div style={{...styles.metricCard, padding: '16px'}}>
-                  <div style={{fontSize: '12px', color: '#666', marginBottom: '4px'}}>Annual Net Profit</div>
-                  <div style={{fontSize: '24px', fontWeight: 'bold', color: annualNetProfit >= 0 ? '#587C74' : '#BB463C'}}>
-                    €{annualNetProfit.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                  </div>
-                </div>
-                
-                <div style={{...styles.metricCard, padding: '16px'}}>
-                  <div style={{fontSize: '12px', color: '#666', marginBottom: '4px'}}>Avg Monthly Profit</div>
-                  <div style={{fontSize: '24px', fontWeight: 'bold', color: avgMonthlyNetProfit >= 0 ? '#587C74' : '#BB463C'}}>
-                    €{avgMonthlyNetProfit.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                  </div>
-                </div>
-                
-                <div style={{...styles.metricCard, padding: '16px'}}>
-                  <div style={{fontSize: '12px', color: '#666', marginBottom: '4px'}}>Best Month</div>
-                  <div style={{fontSize: '20px', fontWeight: 'bold', color: '#587C74'}}>
-                    {bestMonth.month}
-                  </div>
-                  <div style={{fontSize: '14px', color: '#666'}}>
-                    €{bestMonth.netProfit.toFixed(0)}
-                  </div>
-                </div>
-                
-                <div style={{...styles.metricCard, padding: '16px'}}>
-                  <div style={{fontSize: '12px', color: '#666', marginBottom: '4px'}}>Worst Month</div>
-                  <div style={{fontSize: '20px', fontWeight: 'bold', color: worstMonth.netProfit >= 0 ? '#F2CC8F' : '#BB463C'}}>
-                    {worstMonth.month}
-                  </div>
-                  <div style={{fontSize: '14px', color: '#666'}}>
-                    €{worstMonth.netProfit.toFixed(0)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Monthly Performance Chart */}
-              <div style={{marginBottom: '32px'}}>
-                <h3 style={{fontSize: '16px', fontWeight: 'bold', color: '#2F3E46', marginBottom: '16px'}}>
-                  Monthly Performance Across Year
-                </h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <ComposedChart data={seasonalData}>
+              {showProfitProjection && (
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={projectionData}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis 
-                      yAxisId="left"
-                      label={{ value: 'Profit (€)', angle: -90, position: 'insideLeft' }}
+                    <XAxis 
+                      dataKey="month" 
+                      label={{ value: 'Months', position: 'insideBottom', offset: -5 }}
                     />
                     <YAxis 
-                      yAxisId="right" 
-                      orientation="right"
-                      label={{ value: 'Multiplier (%)', angle: 90, position: 'insideRight' }}
+                      label={{ value: 'Cumulative Profit (€)', angle: -90, position: 'insideLeft' }}
+                      tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
                     />
                     <Tooltip 
-                      formatter={(value: number, name: string) => {
-                        if (name === 'multiplier') return `${value}%`;
-                        return `€${value.toFixed(2)}`;
-                      }}
+                      formatter={(value: any) => `€${parseFloat(value).toFixed(2)}`}
+                      labelFormatter={(label) => `Month ${label}`}
                     />
                     <Legend />
                     <Line 
-                      yAxisId="right"
                       type="monotone" 
-                      dataKey="multiplier" 
-                      stroke="#F2CC8F" 
+                      dataKey="breakEven" 
+                      stroke="#2F3E46" 
                       strokeWidth={2}
-                      name="Demand Multiplier (%)"
-                      dot={{ r: 4 }}
+                      strokeDasharray="5 5"
+                      name="Break-Even Line"
+                      dot={false}
                     />
-                    <Bar 
-                      yAxisId="left"
-                      dataKey="netProfit" 
-                      name="Net Profit (€)"
-                    >
-                      {seasonalData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.netProfit >= 0 ? '#587C74' : '#BB463C'} />
-                      ))}
-                    </Bar>
-                  </ComposedChart>
+                    <Line 
+                      type="monotone" 
+                      dataKey="cumulativeProfit" 
+                      stroke="#587C74" 
+                      strokeWidth={2}
+                      name="Cumulative Profit"
+                      dot={{ fill: '#587C74', r: 3 }}
+                    />
+                  </LineChart>
                 </ResponsiveContainer>
-              </div>
+              )}
+            </div>
 
-              {/* Seasonality Multipliers Input */}
-              <div>
-                <h3 style={{fontSize: '16px', fontWeight: 'bold', color: '#2F3E46', marginBottom: '16px'}}>
-                  Adjust Seasonal Multipliers (% of Baseline)
-                </h3>
-                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px'}}>
-                  {monthKeys.map((key, index) => (
-                    <div key={key}>
-                      <label style={{display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '4px', color: '#2F3E46'}}>
-                        {monthNames[index]}
-                      </label>
-                      <div style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
-                        <input
-                          type="number"
-                          value={seasonalityMultipliers[key]}
-                          onChange={(e) => setSeasonalityMultipliers({
-                            ...seasonalityMultipliers,
-                            [key]: parseInt(e.target.value) || 0
-                          })}
-                          style={{...styles.input, padding: '6px', fontSize: '13px'}}
-                          min="0"
-                          step="5"
-                        />
-                        <span style={{fontSize: '13px', color: '#666'}}>%</span>
+            {/* Labor Capacity Analysis Panel with Eye Icon */}
+            <div data-section data-section-title="Labor Capacity Analysis" style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
+                  ⏱️ Labor Capacity Analysis (Kees Units)
+                  <InfoIcon id="panel-labor" text="Tracks available butcher time (Kees Units = minutes). Shows if your sales plan is realistic given prep time constraints. Over 90% utilization = may need more staff or slower months." />
+                </h2>
+                <button
+                  onMouseEnter={() => setHoveredEye('labor')}
+                  onMouseLeave={() => setHoveredEye(null)}
+                  onClick={() => setShowLaborCapacity(!showLaborCapacity)}
+                  style={{
+                    ...styles.eyeButton,
+                    ...(hoveredEye === 'labor' ? styles.eyeButtonHover : {})
+                  }}
+                >
+                  <EyeIcon isOpen={showLaborCapacity} />
+                </button>
+              </div>
+              
+              {showLaborCapacity && (
+                <>
+                  <div style={{
+                    ...styles.infoBox,
+                    backgroundColor: '#e8f4f1',
+                    borderLeft: '4px solid #587C74'
+                  }}>
+                    <p style={{margin: 0, fontSize: '14px'}}>
+                      <strong>💡 What are Kees Units?</strong> 1 Kees Unit = 1 minute of butcher labor. This shows if your sales plan is realistic given available prep time.
+                    </p>
+                  </div>
+
+                  <div style={{display: 'grid', gridTemplateColumns: '150px 150px', gap: '16px', marginTop: '16px', marginBottom: '16px'}}>
+                    <div>
+                      <label style={{display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '4px'}}>Hours per Day:</label>
+                      <input
+                        type="number"
+                        value={hoursPerDay}
+                        onChange={(e) => setHoursPerDay(parseInt(e.target.value) || 0)}
+                        style={styles.input}
+                      />
+                    </div>
+                    <div>
+                      <label style={{display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '4px'}}>Days per Month:</label>
+                      <input
+                        type="number"
+                        value={daysPerMonth}
+                        onChange={(e) => setDaysPerMonth(parseInt(e.target.value) || 0)}
+                        style={styles.input}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px'}}>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#e8f4f1',
+                      borderLeft: '4px solid #587C74',
+                      margin: 0
+                    }}>
+                      <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Available</div>
+                      <div style={{fontSize: '28px', fontWeight: 'bold', color: '#587C74'}}>
+                        {totalMonthlyMinutes.toLocaleString()} min
                       </div>
                     </div>
-                  ))}
-                </div>
-                
-                <div style={{display: 'flex', gap: '8px', marginTop: '16px'}}>
-                  <button
-                    onClick={() => setSeasonalityMultipliers({
-                      jan: 100, feb: 100, mar: 100, apr: 100, may: 100, jun: 100,
-                      jul: 100, aug: 100, sep: 100, oct: 100, nov: 100, dec: 100
-                    })}
-                    style={{
-                      ...styles.button,
-                      backgroundColor: '#2F3E46',
-                      fontSize: '13px',
-                      padding: '8px 16px'
-                    }}
-                  >
-                    Reset to 100% (No Seasonality)
-                  </button>
-                  
-                  <button
-                    onClick={() => setSeasonalityMultipliers({
-                      jan: 70, feb: 70, mar: 85, apr: 100, may: 120, jun: 140,
-                      jul: 150, aug: 145, sep: 120, oct: 100, nov: 80, dec: 90
-                    })}
-                    style={{
-                      ...styles.button,
-                      fontSize: '13px',
-                      padding: '8px 16px'
-                    }}
-                  >
-                    Apply BBQ Seasonality Pattern
-                  </button>
-                </div>
-              </div>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#ffe5e5',
+                      borderLeft: '4px solid #BB463C',
+                      margin: 0
+                    }}>
+                      <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Used</div>
+                      <div style={{fontSize: '28px', fontWeight: 'bold', color: '#BB463C'}}>
+                        {totalPrepTime.toLocaleString()} min
+                      </div>
+                    </div>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#e8f4f1',
+                      borderLeft: '4px solid #587C74',
+                      margin: 0
+                    }}>
+                      <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Remaining</div>
+                      <div style={{fontSize: '28px', fontWeight: 'bold', color: '#587C74'}}>
+                        {remainingCapacity.toLocaleString()} min
+                      </div>
+                    </div>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#e8f0f4',
+                      borderLeft: '4px solid #2F3E46',
+                      margin: 0
+                    }}>
+                      <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Utilization</div>
+                      <div style={{fontSize: '28px', fontWeight: 'bold', color: '#2F3E46'}}>
+                        {utilizationPercent.toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
 
-              {/* Monthly Breakdown Table */}
-              <div style={{marginTop: '32px', overflowX: 'auto'}}>
-                <h3 style={{fontSize: '16px', fontWeight: 'bold', color: '#2F3E46', marginBottom: '16px'}}>
-                  Detailed Monthly Breakdown
-                </h3>
-                <table style={styles.table}>
-                  <thead>
-                    <tr>
-                      <th style={{...styles.tableHeader, textAlign: 'left'}}>Month</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Multiplier</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Revenue</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>COGS</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Gross Margin</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Operating Expenses</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Net Profit</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Capacity Used</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {seasonalData.map((month, index) => (
-                      <tr key={index} style={{backgroundColor: month.netProfit >= 0 ? '#f0f7f5' : '#fff5f5'}}>
-                        <td style={{...styles.tableCell, fontWeight: '500'}}>{month.month}</td>
-                        <td style={{...styles.tableCell, textAlign: 'right'}}>
-                          <span style={{
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            backgroundColor: month.multiplier >= 100 ? '#e8f4f1' : '#fff3cd',
-                            color: month.multiplier >= 100 ? '#587C74' : '#BB463C'
-                          }}>
-                            {month.multiplier}%
-                          </span>
-                        </td>
-                        <td style={{...styles.tableCell, textAlign: 'right', color: '#587C74'}}>
-                          €{month.revenue.toFixed(0)}
-                        </td>
-                        <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>
-                          €{month.cost.toFixed(0)}
-                        </td>
-                        <td style={{...styles.tableCell, textAlign: 'right', fontWeight: '500'}}>
-                          €{month.margin.toFixed(0)}
-                        </td>
-                        <td style={{...styles.tableCell, textAlign: 'right'}}>
-                          €{month.opex.toFixed(0)}
-                        </td>
-                        <td style={{...styles.tableCell, textAlign: 'right', fontWeight: 'bold', color: month.netProfit >= 0 ? '#587C74' : '#BB463C'}}>
-                          €{month.netProfit.toFixed(0)}
-                        </td>
-                        <td style={{...styles.tableCell, textAlign: 'right'}}>
-                          <span style={{color: month.utilization > 100 ? '#BB463C' : month.utilization > 85 ? '#F2CC8F' : '#587C74'}}>
-                            {month.utilization.toFixed(0)}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{backgroundColor: '#f5f5f5', fontWeight: 'bold', borderTop: '2px solid #2F3E46'}}>
-                      <td style={{...styles.tableCell, textAlign: 'left'}}>ANNUAL TOTAL</td>
-                      <td style={{...styles.tableCell, textAlign: 'right'}}>-</td>
-                      <td style={{...styles.tableCell, textAlign: 'right', color: '#587C74'}}>
-                        €{annualRevenue.toFixed(0)}
-                      </td>
-                      <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>
-                        €{annualCost.toFixed(0)}
-                      </td>
-                      <td style={{...styles.tableCell, textAlign: 'right'}}>
-                        €{annualMargin.toFixed(0)}
-                      </td>
-                      <td style={{...styles.tableCell, textAlign: 'right'}}>
-                        €{annualOpex.toFixed(0)}
-                      </td>
-                      <td style={{...styles.tableCell, textAlign: 'right', color: annualNetProfit >= 0 ? '#587C74' : '#BB463C'}}>
-                        €{annualNetProfit.toFixed(0)}
-                      </td>
-                      <td style={styles.tableCell}></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                  <div style={styles.progressBar}>
+                    <div style={{
+                      ...styles.progressFill,
+                      width: `${Math.min(utilizationPercent, 100)}%`,
+                      backgroundColor: utilizationPercent > 90 ? '#BB463C' : '#587C74'
+                    }}>
+                      {utilizationPercent.toFixed(1)}%
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
 
-              {/* Cash Flow Warning */}
-              {worstMonth.netProfit < 0 && (
-                <div style={{
-                  ...styles.infoBox,
-                  backgroundColor: '#ffe5e5',
-                  borderLeft: '4px solid #BB463C',
-                  marginTop: '24px'
-                }}>
-                  <h3 style={{fontSize: '16px', fontWeight: 'bold', color: '#BB463C', marginBottom: '8px'}}>
-                    ⚠️ Cash Flow Alert
-                  </h3>
-                  <p style={{margin: 0, fontSize: '14px', color: '#282828', lineHeight: '1.6'}}>
-                    <strong>Warning:</strong> You'll lose money in {seasonalData.filter(m => m.netProfit < 0).length} months of the year.
-                    Worst month: {worstMonth.month} (€{worstMonth.netProfit.toFixed(0)} loss).
-                    <br /><br />
-                    <strong>Cash Reserve Needed:</strong> You need at least €{Math.abs(worstMonth.netProfit * 3).toFixed(0)} 
-                    in working capital to survive slow months (3x worst month).
-                    <br /><br />
-                    <strong>Options:</strong>
-                    <ul style={{marginTop: '8px', marginBottom: 0, paddingLeft: '20px'}}>
+            {/* Seasonality & Annual Performance Panel with Eye Icon */}
+            <div data-section data-section-title="Seasonality & Annual Performance" style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
+                  📅 Seasonality & Annual Performance
+                  <InfoIcon id="panel-seasonality" text="Model monthly sales fluctuations. BBQ businesses see peak demand in summer (120-150% of baseline) and slower winters (70-90%). Adjust multipliers to match your expected seasonal patterns." />
+                </h2>
+                <button
+                  onMouseEnter={() => setHoveredEye('seasonality')}
+                  onMouseLeave={() => setHoveredEye(null)}
+                  onClick={() => setShowSeasonality(!showSeasonality)}
+                  style={{
+                    ...styles.eyeButton,
+                    ...(hoveredEye === 'seasonality' ? styles.eyeButtonHover : {})
+                  }}
+                >
+                  <EyeIcon isOpen={showSeasonality} />
+                </button>
+              </div>
+              
+              {showSeasonality && (
+                <>
+                  <div style={{
+                    ...styles.infoBox,
+                    backgroundColor: '#fff3cd',
+                    borderLeft: '4px solid #BB463C'
+                  }}>
+                    <p style={{margin: 0, fontSize: '14px'}}>
+                      <strong>💡 Why This Matters:</strong> BBQ demand fluctuates by season. Summer is peak (BBQ season), winter is slower. These multipliers let you model realistic monthly variations from your baseline sales. Set 100% = baseline (current product volumes), then adjust each month up or down.
+                    </p>
+                  </div>
+
+                  <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '16px', marginBottom: '16px'}}>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#e8f4f1',
+                      borderLeft: '4px solid #587C74',
+                      margin: 0
+                    }}>
+                      <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Annual Revenue</div>
+                      <div style={{fontSize: '28px', fontWeight: 'bold', color: '#587C74'}}>
+                        €{annualRevenue.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                    </div>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#ffe5e5',
+                      borderLeft: '4px solid #BB463C',
+                      margin: 0
+                    }}>
+                      <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Annual Net Profit</div>
+                      <div style={{fontSize: '28px', fontWeight: 'bold', color: '#BB463C'}}>
+                        €{annualNetProfit.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                    </div>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#ffe5e5',
+                      borderLeft: '4px solid #BB463C',
+                      margin: 0
+                    }}>
+                      <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Avg Monthly Profit</div>
+                      <div style={{fontSize: '28px', fontWeight: 'bold', color: '#BB463C'}}>
+                        €{avgMonthlyProfit.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                    </div>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#e8f4f1',
+                      borderLeft: '4px solid #587C74',
+                      margin: 0
+                    }}>
+                      <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Best Month</div>
+                      <div style={{fontSize: '28px', fontWeight: 'bold', color: '#587C74'}}>
+                        {bestMonth.month}
+                      </div>
+                      <div style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
+                        €{bestMonth.netProfit.toFixed(0)}
+                      </div>
+                    </div>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#ffe5e5',
+                      borderLeft: '4px solid #BB463C',
+                      margin: 0
+                    }}>
+                      <div style={{fontSize: '14px', color: '#282828', marginBottom: '4px'}}>Worst Month</div>
+                      <div style={{fontSize: '28px', fontWeight: 'bold', color: '#BB463C'}}>
+                        {worstMonth.month}
+                      </div>
+                      <div style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
+                        €{worstMonth.netProfit.toFixed(0)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <h3 style={{fontSize: '18px', fontWeight: 'bold', marginBottom: '16px'}}>Monthly Performance Across Year</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <ComposedChart data={monthlyData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis 
+                        yAxisId="left"
+                        label={{ value: 'Net Profit (€)', angle: -90, position: 'insideLeft' }}
+                      />
+                      <YAxis 
+                        yAxisId="right"
+                        orientation="right"
+                        label={{ value: 'Multiplier (%)', angle: 90, position: 'insideRight' }}
+                      />
+                      <Tooltip 
+                        formatter={(value: any, name: string) => {
+                          if (name === 'Demand Multiplier (%)') return `${value}%`;
+                          return `€${parseFloat(value).toFixed(2)}`;
+                        }}
+                      />
+                      <Legend />
+                      <Bar 
+                        yAxisId="left"
+                        dataKey="netProfit" 
+                        name="Net Profit (€)"
+                      >
+                        {monthlyData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.netProfit >= 0 ? '#587C74' : '#BB463C'} />
+                        ))}
+                      </Bar>
+                      <Line 
+                        yAxisId="right"
+                        type="monotone" 
+                        dataKey="multiplier" 
+                        stroke="#FF9800" 
+                        strokeWidth={2}
+                        name="Demand Multiplier (%)"
+                        dot={{ fill: '#FF9800', r: 4 }}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+
+                  <div style={{marginTop: '24px'}}>
+                    <h3 style={{fontSize: '18px', fontWeight: 'bold', marginBottom: '16px'}}>
+                      Adjust Seasonal Multipliers (% of Baseline)
+                    </h3>
+                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px', marginBottom: '16px'}}>
+                      {Object.entries(seasonalMultipliers).map(([month, value]) => (
+                        <div key={month}>
+                          <label style={{display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '4px'}}>
+                            {month}
+                          </label>
+                          <input
+                            type="number"
+                            value={value}
+                            onChange={(e) => updateSeasonalMultiplier(month, parseInt(e.target.value) || 0)}
+                            style={{...styles.inputSmall, width: '100%', textAlign: 'center'}}
+                          />
+                          <div style={{fontSize: '12px', color: '#282828', textAlign: 'center', marginTop: '2px'}}>%</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{display: 'flex', gap: '8px'}}>
+                      <button
+                        onClick={resetSeasonality}
+                        onMouseEnter={() => setHoveredButton('reset-season')}
+                        onMouseLeave={() => setHoveredButton(null)}
+                        style={{
+                          ...styles.filterButton,
+                          ...(hoveredButton === 'reset-season' ? styles.filterButtonActive : {})
+                        }}
+                      >
+                        Reset to 100% (No Seasonality)
+                      </button>
+                      <button
+                        onClick={applyBBQSeasonality}
+                        onMouseEnter={() => setHoveredButton('apply-bbq')}
+                        onMouseLeave={() => setHoveredButton(null)}
+                        style={{
+                          ...styles.filterButton,
+                          ...(hoveredButton === 'apply-bbq' ? styles.filterButtonActive : {})
+                        }}
+                      >
+                        Apply BBQ Seasonality Pattern
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{marginTop: '24px'}}>
+                    <h3 style={{fontSize: '18px', fontWeight: 'bold', marginBottom: '16px'}}>
+                      Detailed Monthly Breakdown
+                    </h3>
+                    <div style={{overflowX: 'auto'}}>
+                      <table style={styles.table}>
+                        <thead>
+                          <tr>
+                            <th style={styles.tableHeader}>Month</th>
+                            <th style={{...styles.tableHeader, textAlign: 'center'}}>Multiplier</th>
+                            <th style={{...styles.tableHeader, textAlign: 'right'}}>Revenue</th>
+                            <th style={{...styles.tableHeader, textAlign: 'right'}}>COGS</th>
+                            <th style={{...styles.tableHeader, textAlign: 'right'}}>Gross Margin</th>
+                            <th style={{...styles.tableHeader, textAlign: 'right'}}>Operating Expenses</th>
+                            <th style={{...styles.tableHeader, textAlign: 'right'}}>Net Profit</th>
+                            <th style={{...styles.tableHeader, textAlign: 'center'}}>Capacity Used</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {monthlyData.map((month) => (
+                            <tr key={month.month}>
+                              <td style={{...styles.tableCell, fontWeight: '600'}}>{month.month}</td>
+                              <td style={{...styles.tableCell, textAlign: 'center'}}>
+                                <span style={{
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  backgroundColor: month.multiplier >= 100 ? '#e8f4f1' : '#ffe5e5',
+                                  color: month.multiplier >= 100 ? '#587C74' : '#BB463C',
+                                  fontWeight: '600'
+                                }}>
+                                  {month.multiplier}%
+                                </span>
+                              </td>
+                              <td style={{...styles.tableCell, textAlign: 'right'}}>€{month.revenue.toFixed(0)}</td>
+                              <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>€{month.cogs.toFixed(0)}</td>
+                              <td style={{...styles.tableCell, textAlign: 'right'}}>€{month.grossMargin.toFixed(0)}</td>
+                              <td style={{...styles.tableCell, textAlign: 'right'}}>€{month.operatingExpenses.toFixed(0)}</td>
+                              <td style={{
+                                ...styles.tableCell, 
+                                textAlign: 'right',
+                                fontWeight: 'bold',
+                                color: month.netProfit >= 0 ? '#587C74' : '#BB463C'
+                              }}>
+                                €{month.netProfit.toFixed(0)}
+                              </td>
+                              <td style={{...styles.tableCell, textAlign: 'center'}}>{month.capacityUsed.toFixed(0)}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot style={{backgroundColor: '#f5f5f5', fontWeight: 'bold'}}>
+                          <tr>
+                            <td colSpan={2} style={{...styles.tableCell, textAlign: 'right'}}>ANNUAL TOTAL</td>
+                            <td style={{...styles.tableCell, textAlign: 'right'}}>€{annualRevenue.toFixed(0)}</td>
+                            <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>
+                              €{monthlyData.reduce((sum, m) => sum + m.cogs, 0).toFixed(0)}
+                            </td>
+                            <td style={{...styles.tableCell, textAlign: 'right'}}>
+                              €{monthlyData.reduce((sum, m) => sum + m.grossMargin, 0).toFixed(0)}
+                            </td>
+                            <td style={{...styles.tableCell, textAlign: 'right'}}>
+                              €{(totalMonthlyOpex * 12).toFixed(0)}
+                            </td>
+                            <td style={{
+                              ...styles.tableCell, 
+                              textAlign: 'right',
+                              color: annualNetProfit >= 0 ? '#587C74' : '#BB463C'
+                            }}>
+                              €{annualNetProfit.toFixed(0)}
+                            </td>
+                            <td style={styles.tableCell}></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div style={styles.warningBox}>
+                    <h3 style={{fontSize: '16px', fontWeight: 'bold', color: '#BB463C', marginBottom: '8px'}}>
+                      ⚠️ Cash Flow Alert
+                    </h3>
+                    <p style={{margin: '8px 0'}}>
+                      <strong>Warning:</strong> You'll lose money in {monthlyData.filter(m => m.netProfit < 0).length} months of the year. 
+                      Worst month: {worstMonth.month} (€{worstMonth.netProfit.toFixed(0)} loss).
+                    </p>
+                    <p style={{margin: '8px 0'}}>
+                      <strong>Cash Reserve Needed:</strong> You need at least €{cashReserveNeeded.toFixed(2)} in working capital to survive slow months (3x worst month).
+                    </p>
+                    <p style={{margin: '8px 0', fontSize: '14px'}}>
+                      <strong>Options:</strong>
+                    </p>
+                    <ul style={{marginLeft: '20px', fontSize: '14px'}}>
                       <li>Build up cash during peak season (summer)</li>
                       <li>Reduce fixed costs in winter (fewer staff hours)</li>
                       <li>Add winter product lines (holiday catering, gift boxes)</li>
                       <li>Adjust prices to improve margins</li>
                     </ul>
-                  </p>
-                </div>
+                  </div>
+                </>
               )}
             </div>
 
-            {/* Dynamic Product Comparison Chart */}
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>🎯 Product Performance Comparison</h2>
-              
-              <div style={{
-                ...styles.infoBox,
-                backgroundColor: '#fff3cd',
-                borderLeft: '4px solid #F2CC8F',
-                marginTop: '16px',
-                marginBottom: '24px'
-              }}>
-                <p style={{margin: 0, fontSize: '14px', color: '#282828'}}>
-                  💡 <strong>Key Insight:</strong> Higher margin doesn't always mean more profit! 
-                  Check "Hourly Potential" to see which products make the most money per hour of labor.
-                </p>
-              </div>
-
-              {/* Chart Controls */}
-              <div style={{display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '24px'}}>
-                <label style={{display: 'flex', alignItems: 'center', cursor: 'pointer'}}>
-                  <input
-                    type="checkbox"
-                    checked={showMargin}
-                    onChange={(e) => setShowMargin(e.target.checked)}
-                    style={styles.checkbox}
-                  />
-                  <span style={{fontSize: '14px', fontWeight: '500'}}>Margin per Unit (€)</span>
-                </label>
-                
-                <label style={{display: 'flex', alignItems: 'center', cursor: 'pointer'}}>
-                  <input
-                    type="checkbox"
-                    checked={showThroughput}
-                    onChange={(e) => setShowThroughput(e.target.checked)}
-                    style={styles.checkbox}
-                  />
-                  <span style={{fontSize: '14px', fontWeight: '500'}}>Units per Hour</span>
-                </label>
-                
-                <label style={{display: 'flex', alignItems: 'center', cursor: 'pointer'}}>
-                  <input
-                    type="checkbox"
-                    checked={showHourlyPotential}
-                    onChange={(e) => setShowHourlyPotential(e.target.checked)}
-                    style={styles.checkbox}
-                  />
-                  <span style={{fontSize: '14px', fontWeight: '500', color: '#587C74'}}>
-                    💰 Hourly Profit Potential (€)
-                  </span>
-                </label>
-                
-                <label style={{display: 'flex', alignItems: 'center', cursor: 'pointer'}}>
-                  <input
-                    type="checkbox"
-                    checked={showMonthlySalesPotential}
-                    onChange={(e) => setShowMonthlySalesPotential(e.target.checked)}
-                    style={styles.checkbox}
-                  />
-                  <span style={{fontSize: '14px', fontWeight: '500', color: '#2F3E46'}}>
-                    Monthly Sales Potential (€)
-                  </span>
-                </label>
-              </div>
-
-              <ResponsiveContainer width="100%" height={400}>
-                <ComposedChart data={comparisonChartData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    width={150}
-                    style={{ fontSize: '12px' }}
-                  />
-                  <Tooltip 
-                    formatter={(value: number) => value.toFixed(2)}
-                    labelFormatter={(label) => {
-                      const item = comparisonChartData.find(d => d.name === label);
-                      return item ? item.fullName : label;
-                    }}
-                  />
-                  <Legend />
-                  
-                  {showMargin && (
-                    <Bar dataKey="margin" fill="#BB463C" name="Margin per Unit (€)" />
-                  )}
-                  
-                  {showThroughput && (
-                    <Bar dataKey="unitsPerHour" fill="#F2CC8F" name="Units per Hour" />
-                  )}
-                  
-                  {showHourlyPotential && (
-                    <Bar dataKey="hourlyPotential" fill="#587C74" name="Hourly Profit Potential (€)" />
-                  )}
-                  
-                  {showMonthlySalesPotential && (
-                    <Bar dataKey="monthlySalesPotential" fill="#2F3E46" name="Monthly Sales Potential (€)" />
-                  )}
-                </ComposedChart>
-              </ResponsiveContainer>
-
-              <div style={{
-                ...styles.infoBox,
-                backgroundColor: '#e8f4f1',
-                borderLeft: '4px solid #587C74',
-                marginTop: '24px'
-              }}>
-                <h3 style={{fontSize: '16px', fontWeight: 'bold', color: '#2F3E46', marginBottom: '12px'}}>
-                  📊 How to Read This Chart
-                </h3>
-                <ul style={{margin: 0, paddingLeft: '20px', fontSize: '14px', color: '#282828', lineHeight: '1.8'}}>
-                  <li><strong>Margin per Unit:</strong> Raw profit per product sold</li>
-                  <li><strong>Units per Hour:</strong> How many you can prepare in 60 minutes</li>
-                  <li><strong>Hourly Profit Potential:</strong> Total profit if you spent 1 hour making only this product</li>
-                  <li><strong>Monthly Sales Potential:</strong> Maximum profit if you dedicated all capacity to this product</li>
-                </ul>
-                <p style={{marginTop: '12px', marginBottom: 0, fontSize: '14px', color: '#282828'}}>
-                  <strong>💡 Strategic Tip:</strong> Products with high "Hourly Profit Potential" give you the best return on your limited butcher time!
-                </p>
-              </div>
-            </div>
-
-            {/* Product Efficiency Ranking */}
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>🏆 Product Efficiency Ranking (€/Minute)</h2>
-              
-              <div style={{
-                ...styles.infoBox,
-                backgroundColor: '#fff3cd',
-                borderLeft: '4px solid #F2CC8F',
-                marginTop: '16px',
-                marginBottom: '16px'
-              }}>
-                <p style={{margin: 0, fontSize: '14px', color: '#282828'}}>
-                  💡 <strong>Key Insight:</strong> Products at the top make MORE money per minute of Kees' time. 
-                  Focus on promoting these high-efficiency items!
-                </p>
-              </div>
-
-              <ResponsiveContainer width="100%" height={Math.max(300, productEfficiency.length * 40)}>
-                <BarChart data={productEfficiency} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" label={{ value: '€ per Minute', position: 'insideBottom', offset: -5 }} />
-                  <YAxis dataKey="name" type="category" width={180} style={{ fontSize: '13px' }} />
-                  <Tooltip 
-                    formatter={(value: number) => `€${value.toFixed(2)}/min`}
-                    labelFormatter={(label) => label}
-                  />
-                  <Bar dataKey="euroPerMinute" name="€ per Minute">
-                    {productEfficiency.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={entry.category === 'Classic' ? COLORS.classic : COLORS.pitmaster} 
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-
-              {/* Efficiency breakdown table */}
-              <div style={{marginTop: '24px', overflowX: 'auto'}}>
-                <table style={styles.table}>
-                  <thead>
-                    <tr>
-                      <th style={{...styles.tableHeader, textAlign: 'left'}}>Product</th>
-                      <th style={{...styles.tableHeader, textAlign: 'center'}}>Category</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Margin/Unit</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>€/Minute</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>€/Hour</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Units/Hour</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Current Units</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Max Monthly</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {productEfficiency.map((p, idx) => (
-                      <tr key={idx} style={{backgroundColor: p.category === 'Classic' ? '#f8f9fa' : '#f0f7f5'}}>
-                        <td style={styles.tableCell}>{p.name}</td>
-                        <td style={{...styles.tableCell, textAlign: 'center'}}>
-                          <span style={{
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            backgroundColor: p.category === 'Classic' ? '#e8f0f4' : '#e8f4f1',
-                            color: p.category === 'Classic' ? COLORS.classic : COLORS.pitmaster
-                          }}>
-                            {p.category}
-                          </span>
-                        </td>
-                        <td style={{...styles.tableCell, textAlign: 'right'}}>€{p.margin.toFixed(2)}</td>
-                        <td style={{...styles.tableCell, textAlign: 'right', fontWeight: 'bold', color: '#587C74'}}>
-                          €{p.euroPerMinute.toFixed(2)}
-                        </td>
-                        <td style={{...styles.tableCell, textAlign: 'right', fontWeight: 'bold', color: '#2F3E46'}}>
-                          €{p.euroPerHour.toFixed(2)}
-                        </td>
-                        <td style={{...styles.tableCell, textAlign: 'right'}}>{p.unitsPerHour.toFixed(1)}</td>
-                        <td style={{...styles.tableCell, textAlign: 'right'}}>{p.currentUnits}</td>
-                        <td style={{...styles.tableCell, textAlign: 'right', color: '#666'}}>{p.maxMonthlySales}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Top 10 Products by Margin Contribution */}
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>Top 10 Products by Margin Contribution</h2>
-              
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={topProductsByMargin}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" angle={-45} textAnchor="end" height={120} style={{ fontSize: '12px' }} />
-                  <YAxis label={{ value: '€', angle: -90, position: 'insideLeft' }} />
-                  <Tooltip 
-                    formatter={(value: number) => `€${value.toFixed(2)}`}
-                  />
-                  <Bar dataKey="totalMarginContribution" name="Total Margin Contribution (€)">
-                    {topProductsByMargin.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={entry.category === 'Classic' ? COLORS.classic : COLORS.pitmaster} 
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-
-              <div style={{marginTop: '16px', fontSize: '14px', color: '#666', textAlign: 'center'}}>
-                These products contribute the most to your total gross margin based on current sales volumes
-              </div>
-            </div>
-
-            {/* Classic vs Pitmaster Comparison */}
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>📊 Classic vs Pitmaster Performance</h2>
-              
-              <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '24px'}}>
-                <div style={{...styles.infoBox, backgroundColor: '#e8f0f4', borderLeft: `4px solid ${COLORS.classic}`, margin: 0}}>
-                  <h3 style={{fontSize: '16px', fontWeight: 'bold', color: COLORS.classic, marginBottom: '12px'}}>
-                    🥩 Classic Products
-                  </h3>
-                  <div style={{fontSize: '14px', color: '#282828', lineHeight: '1.8'}}>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>Revenue:</strong></span>
-                      <span style={{fontWeight: 'bold', color: COLORS.classic}}>
-                        €{calculations.classicRevenue.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                      </span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>COGS:</strong></span>
-                      <span>€{calculations.classicCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})}</span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>Gross Margin:</strong></span>
-                      <span style={{fontWeight: 'bold', color: calculations.classicMargin >= 0 ? '#587C74' : '#BB463C'}}>
-                        €{calculations.classicMargin.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                      </span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>Units Sold:</strong></span>
-                      <span>{calculations.classicUnits} ({((calculations.classicUnits / calculations.totalUnits) * 100).toFixed(1)}%)</span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>Avg Margin/Unit:</strong></span>
-                      <span style={{fontWeight: 'bold'}}>€{calculations.classicAvgMargin.toFixed(2)}</span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between'}}>
-                      <span><strong>Prep Time:</strong></span>
-                      <span>{calculations.classicPrepTime} min ({((calculations.classicPrepTime / calculations.totalPrepTime) * 100).toFixed(1)}%)</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{...styles.infoBox, backgroundColor: '#e8f4f1', borderLeft: `4px solid ${COLORS.pitmaster}`, margin: 0}}>
-                  <h3 style={{fontSize: '16px', fontWeight: 'bold', color: COLORS.pitmaster, marginBottom: '12px'}}>
-                    👨‍🍳 Pitmaster Products
-                  </h3>
-                  <div style={{fontSize: '14px', color: '#282828', lineHeight: '1.8'}}>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>Revenue:</strong></span>
-                      <span style={{fontWeight: 'bold', color: COLORS.pitmaster}}>
-                        €{calculations.pitmasterRevenue.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                      </span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>COGS:</strong></span>
-                      <span>€{calculations.pitmasterCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})}</span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>Gross Margin:</strong></span>
-                      <span style={{fontWeight: 'bold', color: calculations.pitmasterMargin >= 0 ? '#587C74' : '#BB463C'}}>
-                        €{calculations.pitmasterMargin.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                      </span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>Units Sold:</strong></span>
-                      <span>{calculations.pitmasterUnits} ({((calculations.pitmasterUnits / calculations.totalUnits) * 100).toFixed(1)}%)</span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>Avg Margin/Unit:</strong></span>
-                      <span style={{fontWeight: 'bold'}}>€{calculations.pitmasterAvgMargin.toFixed(2)}</span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between'}}>
-                      <span><strong>Prep Time:</strong></span>
-                      <span>{calculations.pitmasterPrepTime} min ({((calculations.pitmasterPrepTime / calculations.totalPrepTime) * 100).toFixed(1)}%)</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{...styles.infoBox, backgroundColor: netProfit >= 0 ? '#e8f4f1' : '#ffe5e5', borderLeft: `4px solid ${netProfit >= 0 ? '#587C74' : '#BB463C'}`, margin: 0}}>
-                  <h3 style={{fontSize: '16px', fontWeight: 'bold', color: netProfit >= 0 ? '#587C74' : '#BB463C', marginBottom: '12px'}}>
-                    💰 Net Position
-                  </h3>
-                  <div style={{fontSize: '14px', color: '#282828', lineHeight: '1.8'}}>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>Gross Margin:</strong></span>
-                      <span>€{calculations.totalMargin.toLocaleString('nl-NL', {minimumFractionDigits: 2})}</span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                      <span><strong>Operating Expenses:</strong></span>
-                      <span>€{totalOperatingExpenses.toLocaleString('nl-NL', {minimumFractionDigits: 2})}</span>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '12px', paddingTop: '8px', borderTop: '1px solid #d4d4d4'}}>
-                      <span><strong>Net Profit:</strong></span>
-                      <span style={{fontSize: '18px', fontWeight: 'bold', color: netProfit >= 0 ? '#587C74' : '#BB463C'}}>
-                        €{netProfit.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                      </span>
-                    </div>
-                    <div style={{fontSize: '12px', color: '#666', marginTop: '12px'}}>
-                      {netProfit >= 0 
-                        ? '✅ Operating above break-even point' 
-                        : `⚠️ Need €${Math.abs(netProfit).toFixed(2)} more in revenue or reduce costs`}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Strategic Insights */}
-              <div style={{...styles.infoBox, backgroundColor: '#fff3cd', borderLeft: '4px solid #BB463C', marginTop: '24px'}}>
-                <h3 style={{fontSize: '16px', fontWeight: 'bold', color: '#BB463C', marginBottom: '12px'}}>
-                  💡 Strategic Insights
-                </h3>
-                <ul style={{margin: 0, paddingLeft: '20px', fontSize: '14px', color: '#282828', lineHeight: '1.8'}}>
-                  <li>
-                    <strong>Margin Efficiency:</strong> Pitmaster products generate €{calculations.pitmasterAvgMargin.toFixed(2)} 
-                    margin per unit vs €{calculations.classicAvgMargin.toFixed(2)} for Classic products 
-                    ({calculations.pitmasterAvgMargin > Math.abs(calculations.classicAvgMargin) ? 
-                      `${((calculations.pitmasterAvgMargin / Math.max(Math.abs(calculations.classicAvgMargin), 0.01)) * 100).toFixed(0)}% better` : 
-                      'lower'})
-                  </li>
-                  <li>
-                    <strong>Time ROI:</strong> Classic products take {calculations.classicPrepTime} min 
-                    ({((calculations.classicPrepTime / calculations.totalPrepTime) * 100).toFixed(1)}% of capacity) 
-                    generating {((calculations.classicRevenue / calculations.totalRevenue) * 100).toFixed(1)}% of revenue
-                  </li>
-                  <li>
-                    <strong>Volume Strategy:</strong> Currently selling {calculations.classicUnits} Classic units 
-                    and {calculations.pitmasterUnits} Pitmaster units. 
-                    {calculations.pitmasterMargin > calculations.classicMargin && 
-                      ' Consider increasing Pitmaster production for higher margins.'}
-                  </li>
-                  <li>
-                    <strong>Break-Even Analysis:</strong> Need {breakEvenUnits} total units to cover operating costs. 
-                    Current mix: {calculations.classicUnits} Classic + {calculations.pitmasterUnits} Pitmaster = {calculations.totalUnits} units
-                    {calculations.totalUnits < breakEvenUnits && ` (need ${breakEvenUnits - calculations.totalUnits} more units)`}
-                  </li>
-                </ul>
-              </div>
-            </div>
-
-            {/* Product Details Table with Filter */}
-            <div style={styles.card}>
+            {/* Product Performance Comparison Panel with Eye Icon */}
+            <div data-section data-section-title="Product Performance Comparison" style={styles.card}>
               <div style={styles.cardHeader}>
-                <h2 style={styles.cardTitle}>Monthly Sales Volume Input</h2>
-                <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
-                  <div style={{display: 'flex', gap: '8px'}}>
+                <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
+                  🎯 Product Performance Comparison
+                  <InfoIcon id="panel-performance" text="Compare products by different metrics to see which ones are most profitable. Use checkboxes to toggle views. Higher bars = better performance for that metric." />
+                </h2>
+                <button
+                  onMouseEnter={() => setHoveredEye('performance')}
+                  onMouseLeave={() => setHoveredEye(null)}
+                  onClick={() => setShowProductPerformance(!showProductPerformance)}
+                  style={{
+                    ...styles.eyeButton,
+                    ...(hoveredEye === 'performance' ? styles.eyeButtonHover : {})
+                  }}
+                >
+                  <EyeIcon isOpen={showProductPerformance} />
+                </button>
+              </div>
+              
+              {showProductPerformance && (
+                <>
+                  <div style={{
+                    ...styles.infoBox,
+                    backgroundColor: '#fff3cd',
+                    borderLeft: '4px solid #BB463C'
+                  }}>
+                    <p style={{margin: 0, fontSize: '14px'}}>
+                      <strong>💡 Key Insight:</strong> Higher margin doesn't always mean more profit! Check "Hourly Potential" to see which products make the most money per hour of labor.
+                    </p>
+                  </div>
+
+                  <div style={styles.filterButtonsContainer}>
+                    <label style={{fontWeight: '600', marginRight: '8px'}}>View:</label>
+                    <input
+                      type="checkbox"
+                      checked={showMarginPerUnit}
+                      onChange={(e) => setShowMarginPerUnit(e.target.checked)}
+                      style={{marginRight: '4px'}}
+                    />
+                    <label style={{marginRight: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center'}} onClick={() => setShowMarginPerUnit(!showMarginPerUnit)}>
+                      Margin per Unit (€)
+                      <InfoIcon id="chart-margin" text="Raw profit per product sold. Sell Price minus True Cost (including waste)." />
+                    </label>
+                    <input
+                      type="checkbox"
+                      checked={showUnitsPerHour}
+                      onChange={(e) => setShowUnitsPerHour(e.target.checked)}
+                      style={{marginRight: '4px'}}
+                    />
+                    <label style={{marginRight: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center'}} onClick={() => setShowUnitsPerHour(!showUnitsPerHour)}>
+                      Units per Hour
+                      <InfoIcon id="chart-units" text="How many units can be prepared in 60 minutes. Formula: 60 ÷ Prep Time." />
+                    </label>
+                    <input
+                      type="checkbox"
+                      checked={showHourlyProfitPotential}
+                      onChange={(e) => setShowHourlyProfitPotential(e.target.checked)}
+                      style={{marginRight: '4px'}}
+                    />
+                    <label style={{marginRight: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center'}} onClick={() => setShowHourlyProfitPotential(!showHourlyProfitPotential)}>
+                      💰 Hourly Profit Potential (€)
+                      <InfoIcon id="chart-hourly" text="Total profit if you spent 1 hour making only this product. Units per Hour × Margin per Unit. Best measure of labor ROI!" />
+                    </label>
+                    <input
+                      type="checkbox"
+                      checked={showMonthlySalesPotential}
+                      onChange={(e) => setShowMonthlySalesPotential(e.target.checked)}
+                      style={{marginRight: '4px'}}
+                    />
+                    <label style={{cursor: 'pointer', display: 'flex', alignItems: 'center'}} onClick={() => setShowMonthlySalesPotential(!showMonthlySalesPotential)}>
+                      Monthly Sales Potential (€)
+                      <InfoIcon id="chart-monthly" text="Maximum monthly profit if you dedicated ALL available capacity to just this product. Theoretical maximum." />
+                    </label>
+                  </div>
+
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={productMetrics} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis dataKey="name" type="category" width={150} />
+                      <Tooltip formatter={(value: any, name: string) => {
+                        if (name === "Units per Hour") {
+                          return parseFloat(value).toFixed(1);
+                        }
+                        return `€${parseFloat(value).toFixed(2)}`;
+                      }} />
+                      <Legend />
+                      {showMarginPerUnit && (
+                        <Bar dataKey="marginPerUnit" fill="#BB463C" name="Margin per Unit (€)" />
+                      )}
+                      {showUnitsPerHour && (
+                        <Bar dataKey="unitsPerHour" fill="#587C74" name="Units per Hour" />
+                      )}
+                      {showHourlyProfitPotential && (
+                        <Bar dataKey="hourlyProfitPotential" fill="#FF9800" name="Hourly Profit Potential (€)" />
+                      )}
+                      {showMonthlySalesPotential && (
+                        <Bar dataKey="monthlySalesPotential" fill="#2F3E46" name="Monthly Sales Potential (€)" />
+                      )}
+                    </BarChart>
+                  </ResponsiveContainer>
+
+                  <div style={{
+                    ...styles.infoBox,
+                    backgroundColor: '#e8f4f1',
+                    borderLeft: '4px solid #587C74',
+                    marginTop: '16px'
+                  }}>
+                    <h3 style={{fontSize: '16px', fontWeight: 'bold', marginBottom: '8px'}}>📊 How to Read This Chart</h3>
+                    <ul style={{marginLeft: '20px', fontSize: '14px', lineHeight: '1.6'}}>
+                      <li><strong>Margin per Unit:</strong> Raw profit per product sold</li>
+                      <li><strong>Units per Hour:</strong> How many you can prepare in 60 minutes</li>
+                      <li><strong>Hourly Profit Potential:</strong> Total profit if you spent 1 hour making only this product</li>
+                      <li><strong>Monthly Sales Potential:</strong> Maximum profit if you dedicated all capacity to this product</li>
+                    </ul>
+                    <p style={{margin: '8px 0 0 0', fontSize: '14px'}}>
+                      <strong>💡 Strategic Tip:</strong> Products with high "Hourly Profit Potential" give you the best return on your limited butcher time!
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Product Efficiency Ranking Panel with Eye Icon */}
+            <div data-section data-section-title="Product Efficiency Ranking" style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
+                  🏆 Product Efficiency Ranking (€/Minute)
+                  <InfoIcon id="panel-efficiency" text="Products ranked by profit per minute of labor. Top products make the MOST money per minute of butcher time. Focus on promoting these!" />
+                </h2>
+                <button
+                  onMouseEnter={() => setHoveredEye('efficiency')}
+                  onMouseLeave={() => setHoveredEye(null)}
+                  onClick={() => setShowProductEfficiency(!showProductEfficiency)}
+                  style={{
+                    ...styles.eyeButton,
+                    ...(hoveredEye === 'efficiency' ? styles.eyeButtonHover : {})
+                  }}
+                >
+                  <EyeIcon isOpen={showProductEfficiency} />
+                </button>
+              </div>
+              
+              {showProductEfficiency && (
+                <>
+                  <div style={{
+                    ...styles.infoBox,
+                    backgroundColor: '#fff3cd',
+                    borderLeft: '4px solid #BB463C'
+                  }}>
+                    <p style={{margin: 0, fontSize: '14px'}}>
+                      <strong>💡 Key Insight:</strong> Products at the top make MORE money per minute of Kees' time. Focus on promoting these high-efficiency items!
+                    </p>
+                  </div>
+
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={productEfficiencyRanking} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" label={{ value: '€ per Minute', position: 'insideBottom', offset: -5 }} />
+                      <YAxis dataKey="name" type="category" width={150} />
+                      <Tooltip formatter={(value: any) => `€${parseFloat(value).toFixed(2)}/min`} />
+                      <Bar dataKey="euroPerMinute" fill="#587C74" />
+                    </BarChart>
+                  </ResponsiveContainer>
+
+                  <div style={{overflowX: 'auto', marginTop: '16px'}}>
+                    <table style={styles.table}>
+                      <thead>
+                        <tr>
+                          <th style={styles.tableHeader}>Product</th>
+                          <th style={styles.tableHeader}>Category</th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>Margin/Unit</th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>€/Minute</th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>€/Hour</th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>Units/Hour</th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>Current Units</th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>Max Monthly</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {productEfficiencyRanking.map((product) => (
+                          <tr key={product.id}>
+                            <td style={styles.tableCell}>{product.name}</td>
+                            <td style={styles.tableCell}>
+                              <span style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                backgroundColor: product.category === 'Pitmaster' ? '#e8f4f1' : '#e8f0f4',
+                                color: product.category === 'Pitmaster' ? '#587C74' : '#2F3E46',
+                                fontSize: '12px',
+                                fontWeight: '600'
+                              }}>
+                                {product.category}
+                              </span>
+                            </td>
+                            <td style={{...styles.tableCell, textAlign: 'right'}}>€{product.marginPerUnit.toFixed(2)}</td>
+                            <td style={{...styles.tableCell, textAlign: 'right', fontWeight: 'bold', color: '#587C74'}}>
+                              €{product.euroPerMinute.toFixed(2)}
+                            </td>
+                            <td style={{...styles.tableCell, textAlign: 'right'}}>€{product.hourlyProfitPotential.toFixed(2)}</td>
+                            <td style={{...styles.tableCell, textAlign: 'right'}}>{product.unitsPerHour.toFixed(1)}</td>
+                            <td style={{...styles.tableCell, textAlign: 'right'}}>{product.units}</td>
+                            <td style={{...styles.tableCell, textAlign: 'right'}}>{Math.floor(totalMonthlyMinutes / product.prepTimeMinutes)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Top 10 Products by Margin Contribution Panel with Eye Icon */}
+            <div data-section data-section-title="Top 10 Products by Margin" style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
+                  Top 10 Products by Margin Contribution
+                  <InfoIcon id="panel-top10" text="Products that contribute MOST to your total gross margin based on current sales volumes. These are your revenue workhorses!" />
+                </h2>
+                <button
+                  onMouseEnter={() => setHoveredEye('margin')}
+                  onMouseLeave={() => setHoveredEye(null)}
+                  onClick={() => setShowMarginContribution(!showMarginContribution)}
+                  style={{
+                    ...styles.eyeButton,
+                    ...(hoveredEye === 'margin' ? styles.eyeButtonHover : {})
+                  }}
+                >
+                  <EyeIcon isOpen={showMarginContribution} />
+                </button>
+              </div>
+              
+              {showMarginContribution && (
+                <>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={topMarginProducts}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                      <YAxis label={{ value: '€', angle: -90, position: 'insideLeft' }} />
+                      <Tooltip formatter={(value: any) => `€${parseFloat(value).toFixed(2)}`} />
+                      <Bar dataKey="totalMarginContribution" fill="#587C74" name="Total Margin Contribution (€)" />
+                    </BarChart>
+                  </ResponsiveContainer>
+
+                  <p style={{fontSize: '14px', color: '#282828', textAlign: 'center', marginTop: '8px'}}>
+                    These products contribute the most to your total gross margin based on current sales volumes
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* Classic vs Pitmaster Performance Panel with Eye Icon */}
+            <div data-section data-section-title="Classic vs Pitmaster Performance" style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center'}}>
+                  📊 Classic vs Pitmaster Performance
+                  <InfoIcon id="panel-classvspitmaster" text="Compare your two product categories side-by-side. See which category generates more revenue, uses more time, and has better margins." />
+                </h2>
+                <button
+                  onMouseEnter={() => setHoveredEye('classvspitmaster')}
+                  onMouseLeave={() => setHoveredEye(null)}
+                  onClick={() => setShowClassicVsPitmaster(!showClassicVsPitmaster)}
+                  style={{
+                    ...styles.eyeButton,
+                    ...(hoveredEye === 'classvspitmaster' ? styles.eyeButtonHover : {})
+                  }}
+                >
+                  <EyeIcon isOpen={showClassicVsPitmaster} />
+                </button>
+              </div>
+              
+              {showClassicVsPitmaster && (
+                <>
+                  <div style={styles.gridTwo}>
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#e8f0f4',
+                      borderLeft: '4px solid #2F3E46',
+                      margin: 0
+                    }}>
+                      <h3 style={{fontSize: '16px', fontWeight: 'bold', color: '#2F3E46', marginBottom: '8px'}}>
+                        🍔 Classic Products
+                      </h3>
+                      <div style={{fontSize: '14px', marginBottom: '4px'}}>
+                        <strong>Revenue:</strong> €{calculations.classicRevenue.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                      <div style={{fontSize: '14px', marginBottom: '4px'}}>
+                        <strong>COGS:</strong> €{calculations.classicCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                      <div style={{fontSize: '14px', marginBottom: '4px', color: '#BB463C'}}>
+                        <strong>Gross Margin:</strong> €{calculations.classicMargin.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                      <div style={{fontSize: '14px', marginBottom: '4px'}}>
+                        <strong>Units Sold:</strong> {calculations.classicUnits} ({((calculations.classicUnits / (calculations.classicUnits + calculations.pitmasterUnits)) * 100).toFixed(1)}%)
+                      </div>
+                      <div style={{fontSize: '14px', marginBottom: '4px'}}>
+                        <strong>Avg Margin/Unit:</strong> €{calculations.classicAvgMargin.toFixed(2)}
+                      </div>
+                      <div style={{fontSize: '14px'}}>
+                        <strong>Prep Time:</strong> {calculations.classicPrepTime} min ({((calculations.classicPrepTime / (calculations.classicPrepTime + calculations.pitmasterPrepTime)) * 100).toFixed(1)}%)
+                      </div>
+                    </div>
+
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#e8f4f1',
+                      borderLeft: '4px solid #587C74',
+                      margin: 0
+                    }}>
+                      <h3 style={{fontSize: '16px', fontWeight: 'bold', color: '#587C74', marginBottom: '8px'}}>
+                        🏆 Pitmaster Products
+                      </h3>
+                      <div style={{fontSize: '14px', marginBottom: '4px'}}>
+                        <strong>Revenue:</strong> €{calculations.pitmasterRevenue.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                      <div style={{fontSize: '14px', marginBottom: '4px'}}>
+                        <strong>COGS:</strong> €{calculations.pitmasterCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                      <div style={{fontSize: '14px', marginBottom: '4px', color: '#587C74'}}>
+                        <strong>Gross Margin:</strong> €{calculations.pitmasterMargin.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                      <div style={{fontSize: '14px', marginBottom: '4px'}}>
+                        <strong>Units Sold:</strong> {calculations.pitmasterUnits} ({((calculations.pitmasterUnits / (calculations.classicUnits + calculations.pitmasterUnits)) * 100).toFixed(1)}%)
+                      </div>
+                      <div style={{fontSize: '14px', marginBottom: '4px'}}>
+                        <strong>Avg Margin/Unit:</strong> €{calculations.pitmasterAvgMargin.toFixed(2)}
+                      </div>
+                      <div style={{fontSize: '14px'}}>
+                        <strong>Prep Time:</strong> {calculations.pitmasterPrepTime} min ({((calculations.pitmasterPrepTime / (calculations.classicPrepTime + calculations.pitmasterPrepTime)) * 100).toFixed(1)}%)
+                      </div>
+                    </div>
+
+                    <div style={{
+                      ...styles.infoBox,
+                      backgroundColor: '#ffe5e5',
+                      borderLeft: '4px solid #BB463C',
+                      margin: 0
+                    }}>
+                      <h3 style={{fontSize: '16px', fontWeight: 'bold', color: '#BB463C', marginBottom: '8px'}}>
+                        💰 Net Position
+                      </h3>
+                      <div style={{fontSize: '14px', marginBottom: '4px'}}>
+                        <strong>Gross Margin:</strong> €{calculations.totalMargin.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                      <div style={{fontSize: '14px', marginBottom: '4px'}}>
+                        <strong>Operating Expenses:</strong> €{totalOperatingExpenses.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                      <div style={{fontSize: '18px', fontWeight: 'bold', color: '#BB463C'}}>
+                        <strong>Net Profit:</strong> €{monthlyNetProfit.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                      </div>
+                      <div style={{fontSize: '12px', color: '#BB463C', marginTop: '8px'}}>
+                        ⚠️ Need €{Math.abs(monthlyNetProfit).toFixed(2)} more in revenue or reduce costs
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    ...styles.infoBox,
+                    backgroundColor: '#fff3cd',
+                    borderLeft: '4px solid #BB463C',
+                    marginTop: '16px'
+                  }}>
+                    <h3 style={{fontSize: '16px', fontWeight: 'bold', marginBottom: '8px'}}>💡 Strategic Insights</h3>
+                    <ul style={{marginLeft: '20px', fontSize: '14px', lineHeight: '1.6'}}>
+                      <li><strong>Margin Efficiency:</strong> Pitmaster products generate €{calculations.pitmasterAvgMargin.toFixed(2)} margin per unit vs €{calculations.classicAvgMargin.toFixed(2)} for Classic products (lower)</li>
+                      <li><strong>Time ROI:</strong> Classic products take {calculations.classicPrepTime} min ({((calculations.classicPrepTime / (calculations.classicPrepTime + calculations.pitmasterPrepTime)) * 100).toFixed(1)}% of capacity) generating {((calculations.classicRevenue / calculations.totalRevenue) * 100).toFixed(1)}% of revenue</li>
+                      <li><strong>Volume Strategy:</strong> Currently selling {calculations.classicUnits} Classic + {calculations.pitmasterUnits} Pitmaster units. Consider increasing Pitmaster production for higher margins.</li>
+                      <li><strong>Break-Even Analysis:</strong> Need 0 total units to cover operating costs. Current mix: {calculations.classicUnits} Classic + {calculations.pitmasterUnits} Pitmaster = {calculations.classicUnits + calculations.pitmasterUnits} units</li>
+                    </ul>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Monthly Sales Volume Input Panel with Eye Icon */}
+            <div data-section data-section-title="Monthly Sales Volume Input" style={styles.card}>
+              <div style={styles.cardHeader}>
+                <div style={{display: 'flex', alignItems: 'center'}}>
+                  <h2 style={{...styles.cardTitle, display: 'flex', alignItems: 'center', margin: 0}}>
+                    Monthly Sales Volume Input
+                    <InfoIcon id="panel-salesinput" text="Define your product lineup and monthly sales targets. All calculations flow from this data. Update units to see instant impact on profitability across all panels." />
+                  </h2>
+                </div>
+                <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+                  <div style={styles.filterButtonsContainer}>
                     <button
-                      onClick={() => setCategoryFilter('all')}
+                      onClick={() => setSelectedProductFilter('all')}
                       style={{
                         ...styles.filterButton,
-                        ...(categoryFilter === 'all' ? styles.filterButtonActive : {})
+                        ...(selectedProductFilter === 'all' ? styles.filterButtonActive : {})
                       }}
                     >
                       All Products
                     </button>
                     <button
-                      onClick={() => setCategoryFilter('Classic')}
+                      onClick={() => setSelectedProductFilter('classic')}
                       style={{
                         ...styles.filterButton,
-                        ...(categoryFilter === 'Classic' ? styles.filterButtonActive : {})
+                        ...(selectedProductFilter === 'classic' ? styles.filterButtonActive : {})
                       }}
                     >
                       Classic Only
                     </button>
                     <button
-                      onClick={() => setCategoryFilter('Pitmaster')}
+                      onClick={() => setSelectedProductFilter('pitmaster')}
                       style={{
                         ...styles.filterButton,
-                        ...(categoryFilter === 'Pitmaster' ? styles.filterButtonActive : {})
+                        ...(selectedProductFilter === 'pitmaster' ? styles.filterButtonActive : {})
                       }}
                     >
                       Pitmaster Only
                     </button>
+                    <button
+                      onClick={addProduct}
+                      onMouseEnter={() => setHoveredButton('add-product')}
+                      onMouseLeave={() => setHoveredButton(null)}
+                      style={{
+                        ...styles.button,
+                        ...(hoveredButton === 'add-product' ? styles.buttonHover : {})
+                      }}
+                    >
+                      + Add Product
+                    </button>
                   </div>
                   <button
-                    onClick={addProduct}
-                    onMouseEnter={() => setHoveredButton('add-product')}
-                    onMouseLeave={() => setHoveredButton(null)}
+                    onMouseEnter={() => setHoveredEye('salesvolume')}
+                    onMouseLeave={() => setHoveredEye(null)}
+                    onClick={() => setShowSalesVolumeInput(!showSalesVolumeInput)}
                     style={{
-                      ...styles.button,
-                      ...(hoveredButton === 'add-product' ? styles.buttonHover : {})
+                      ...styles.eyeButton,
+                      ...(hoveredEye === 'salesvolume' ? styles.eyeButtonHover : {})
                     }}
                   >
-                    + Add Product
+                    <EyeIcon isOpen={showSalesVolumeInput} />
                   </button>
                 </div>
               </div>
+
+              {showSalesVolumeInput && (
+                <>
+                  <div style={{overflowX: 'auto'}}>
+                    <table style={styles.table}>
+                      <thead>
+                        <tr>
+                          <th style={{...styles.tableHeader, width: '50px', textAlign: 'center'}}>
+                            <span title="Drag to reorder">⋮⋮</span>
+                          </th>
+                          <th style={{...styles.tableHeader, width: '50px', textAlign: 'center'}}>
+                            <span title="Active">✓</span>
+                          </th>
+                          <th style={{...styles.tableHeader, minWidth: '100px'}}>Product ID</th>
+                          <th style={{...styles.tableHeader, minWidth: '180px'}}>Product</th>
+                          <th style={{...styles.tableHeader, textAlign: 'center'}}>Category</th>
+                          <th style={{...styles.tableHeader, textAlign: 'center'}}>Meat Type</th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>
+                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end'}}>
+                              Weight (kg)
+                              <InfoIcon id="weight" text="The weight of raw meat needed for this product before cooking and trimming." />
+                            </div>
+                          </th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>
+                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end'}}>
+                              Base Cost (€)
+                              <InfoIcon id="basecost" text="The raw cost of meat per unit before accounting for waste. This is what you pay your supplier." />
+                            </div>
+                          </th>
+                          <th style={{...styles.tableHeader, textAlign: 'center'}}>
+                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                              Waste %
+                              <InfoIcon id="waste" text="Percentage lost to trimming, fat removal, and cooking shrinkage. Typical range: 10-15% for quality cuts." />
+                            </div>
+                          </th>
+                          <th style={{...styles.tableHeader, textAlign: 'center'}}>
+                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                              Prep (min)
+                              <InfoIcon id="prep" text="Time in minutes to prepare one unit from raw meat to finished product. Used for capacity planning." />
+                            </div>
+                          </th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>
+                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end'}}>
+                              True Cost (€)
+                              <InfoIcon id="truecost" text="Actual cost per unit after accounting for waste. Formula: Base Cost ÷ (1 - Waste%). This is your real cost." />
+                            </div>
+                          </th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>
+                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end'}}>
+                              Sell (€)
+                              <InfoIcon id="sell" text="The price you charge customers for this product." />
+                            </div>
+                          </th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>
+                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end'}}>
+                              Margin (€)
+                              <InfoIcon id="margin" text="Gross profit per unit. Formula: Sell Price - True Cost. Positive = profitable, negative = losing money." />
+                            </div>
+                          </th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>
+                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end'}}>
+                              €/min
+                              <InfoIcon id="europermin" text="Profit earned per minute of labor. Higher = better use of butcher's time. Key metric for efficiency!" />
+                            </div>
+                          </th>
+                          <th style={{...styles.tableHeader, textAlign: 'right'}}>
+                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end'}}>
+                              Units
+                              <InfoIcon id="units" text="How many units you plan to sell per month. This drives all revenue and cost calculations." />
+                            </div>
+                          </th>
+                          <th style={styles.tableHeader}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {products
+                          .filter(p => {
+                            if (selectedProductFilter === 'all') return true;
+                            if (selectedProductFilter === 'classic') return p.category === 'Classic';
+                            if (selectedProductFilter === 'pitmaster') return p.category === 'Pitmaster';
+                            return true;
+                          })
+                          .map((product) => {
+                            const trueCost = product.costPrice / (1 - product.wastePercentage / 100);
+                            const euroPerMinute = product.prepTimeMinutes > 0 ? product.margin / product.prepTimeMinutes : 0;
+                            
+                            return (
+                              <tr 
+                                key={product.id}
+                                draggable
+                                onDragStart={() => handleDragStart(product.id)}
+                                onDragOver={(e) => handleDragOver(e, product.id)}
+                                onDragEnd={handleDragEnd}
+                                style={{
+                                  opacity: draggedItem === product.id ? 0.5 : 1,
+                                  backgroundColor: product.isActive ? '#f0f9f7' : 'transparent'
+                                }}
+                              >
+                                <td style={{...styles.tableCell, textAlign: 'center'}}>
+                                  <div style={{
+                                    ...styles.dragHandle,
+                                    ...(draggedItem === product.id ? styles.dragHandleActive : {})
+                                  }}>
+                                    ⋮⋮
+                                  </div>
+                                </td>
+                                <td style={{...styles.tableCell, textAlign: 'center'}}>
+                                  <input
+                                    type="checkbox"
+                                    checked={product.isActive}
+                                    onChange={(e) => updateProduct(product.id, 'isActive', e.target.checked)}
+                                    style={styles.checkbox}
+                                    title={product.isActive ? "Active in calculations" : "Inactive"}
+                                  />
+                                </td>
+                                <td style={styles.tableCell}>
+                                  <input
+                                    type="text"
+                                    value={product.productId}
+                                    onChange={(e) => updateProduct(product.id, 'productId', e.target.value)}
+                                    style={{...styles.inputSmall, width: '100px', textAlign: 'left'}}
+                                  />
+                                </td>
+                                <td style={{...styles.tableCell, ...styles.productNameCell}}
+                                    onMouseEnter={() => setHoveredProductName(product.id)}
+                                    onMouseLeave={() => setHoveredProductName(null)}>
+                                  <input
+                                    type="text"
+                                    value={product.name}
+                                    onChange={(e) => updateProduct(product.id, 'name', e.target.value)}
+                                    style={styles.productNameInput}
+                                    title={product.name}
+                                  />
+                                  {hoveredProductName === product.id && product.name.length > 20 && (
+                                    <div style={styles.productNameTooltip}>
+                                      {product.name}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={styles.tableCell}>
+                                  <select
+                                    value={product.category}
+                                    onChange={(e) => updateProduct(product.id, 'category', e.target.value)}
+                                    style={styles.select}
+                                  >
+                                    <option>Classic</option>
+                                    <option>Pitmaster</option>
+                                  </select>
+                                </td>
+                                <td style={styles.tableCell}>
+                                  <select
+                                    value={product.meatType}
+                                    onChange={(e) => updateProduct(product.id, 'meatType', e.target.value)}
+                                    style={styles.select}
+                                  >
+                                    <option>Beef</option>
+                                    <option>Pork</option>
+                                    <option>Poultry</option>
+                                  </select>
+                                </td>
+                                <td style={styles.tableCell}>
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    value={product.weight}
+                                    onChange={(e) => updateProduct(product.id, 'weight', parseFloat(e.target.value) || 0)}
+                                    style={styles.inputSmall}
+                                  />
+                                </td>
+                                <td style={styles.tableCell}>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={product.costPrice}
+                                    onChange={(e) => updateProduct(product.id, 'costPrice', parseFloat(e.target.value) || 0)}
+                                    style={styles.inputSmall}
+                                  />
+                                </td>
+                                <td style={styles.tableCell}>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    value={product.wastePercentage}
+                                    onChange={(e) => updateProduct(product.id, 'wastePercentage', parseFloat(e.target.value) || 0)}
+                                    style={styles.inputSmall}
+                                  />
+                                </td>
+                                <td style={styles.tableCell}>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    value={product.prepTimeMinutes}
+                                    onChange={(e) => updateProduct(product.id, 'prepTimeMinutes', parseInt(e.target.value) || 0)}
+                                    style={styles.inputSmall}
+                                  />
+                                </td>
+                                <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>
+                                  €{trueCost.toFixed(2)}
+                                </td>
+                                <td style={styles.tableCell}>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={product.sellPrice}
+                                    onChange={(e) => updateProduct(product.id, 'sellPrice', parseFloat(e.target.value) || 0)}
+                                    style={styles.inputSmall}
+                                  />
+                                </td>
+                                <td style={{
+                                  ...styles.tableCell, 
+                                  textAlign: 'right',
+                                  color: product.margin >= 0 ? '#587C74' : '#BB463C',
+                                  fontWeight: 'bold'
+                                }}>
+                                  €{product.margin.toFixed(2)}
+                                </td>
+                                <td style={{
+                                  ...styles.tableCell, 
+                                  textAlign: 'right',
+                                  color: euroPerMinute >= 0 ? '#587C74' : '#BB463C'
+                                }}>
+                                  €{euroPerMinute.toFixed(2)}
+                                </td>
+                                <td style={styles.tableCell}>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    value={product.units}
+                                    onChange={(e) => updateProduct(product.id, 'units', parseInt(e.target.value) || 0)}
+                                    style={styles.inputSmall}
+                                  />
+                                </td>
+                                <td style={styles.tableCell}>
+                                  <button
+                                    onClick={() => deleteProduct(product.id)}
+                                    style={styles.deleteButton}
+                                  >
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                      <tfoot style={{backgroundColor: '#f5f5f5', fontWeight: 'bold'}}>
+                        <tr>
+                          <td colSpan={7} style={{...styles.tableCell, textAlign: 'right'}}>ALL TOTALS:</td>
+                          <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>€{calculations.totalCost.toFixed(2)}</td>
+                          <td style={{...styles.tableCell, textAlign: 'right', color: '#587C74'}}>€{calculations.totalRevenue.toFixed(2)}</td>
+                          <td style={{
+                            ...styles.tableCell, 
+                            textAlign: 'right',
+                            color: calculations.totalMargin >= 0 ? '#587C74' : '#BB463C'
+                          }}>€{calculations.totalMargin.toFixed(2)}</td>
+                          <td colSpan={3} style={styles.tableCell}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'startup' && (
+          <div>
+            <div data-section style={styles.card}>
+              <div style={styles.cardHeader}>
+                <div>
+                  <h2 style={styles.cardTitle}>One-Time Startup Costs</h2>
+                  <p style={{fontSize: '28px', fontWeight: 'bold', color: '#2F3E46', marginTop: '8px'}}>
+                    Total Investment: €{totalStartupCosts.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                  </p>
+                  <p style={{fontSize: '16px', color: unpaidStartupCosts > 0 ? '#BB463C' : '#587C74'}}>
+                    Paid: €{paidStartupCosts.toFixed(2)} | Remaining: €{unpaidStartupCosts.toFixed(2)}
+                  </p>
+                </div>
+                <button
+                  onClick={addStartupCost}
+                  onMouseEnter={() => setHoveredButton('add-startup')}
+                  onMouseLeave={() => setHoveredButton(null)}
+                  style={{
+                    ...styles.button,
+                    ...(hoveredButton === 'add-startup' ? styles.buttonHover : {})
+                  }}
+                >
+                  + Add Cost
+                </button>
+              </div>
+
+              <div style={{marginBottom: '16px'}}>
+                <div style={styles.progressBar}>
+                  <div style={{
+                    ...styles.progressFill,
+                    width: `${(paidStartupCosts / totalStartupCosts) * 100}%`
+                  }}>
+                    {((paidStartupCosts / totalStartupCosts) * 100).toFixed(0)}% Paid
+                  </div>
+                </div>
+              </div>
+
               <div style={{overflowX: 'auto'}}>
                 <table style={styles.table}>
                   <thead>
                     <tr>
-                      <th style={{...styles.tableHeader, minWidth: '180px'}}>Product</th>
-                      <th style={{...styles.tableHeader, minWidth: '130px'}}>Category</th>
-                      <th style={{...styles.tableHeader, minWidth: '120px'}}>Meat Type</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Weight (kg)</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Base Cost (€)</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Waste %</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Prep (min)</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>True Cost (€)</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Sell (€)</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Margin (€)</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>€/min</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Units/Mo</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Kees Units</th>
-                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Total Margin (€)</th>
+                      <th style={{...styles.tableHeader, textAlign: 'left'}}>Category</th>
+                      <th style={{...styles.tableHeader, textAlign: 'left'}}>Item</th>
+                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Estimated (€)</th>
+                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Actual (€)</th>
+                      <th style={{...styles.tableHeader, textAlign: 'center'}}>Status</th>
+                      <th style={{...styles.tableHeader, textAlign: 'left'}}>Notes</th>
                       <th style={styles.tableHeader}></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredProducts.map((product) => {
-                      const trueCost = product.costPrice / (1 - product.wastePercentage / 100);
-                      const totalCost = trueCost * product.weight;
-                      const euroPerMin = product.prepTimeMinutes > 0 ? product.margin / product.prepTimeMinutes : 0;
-                      const keesUnits = calculations.totalUnits > 0 ? product.units * (product.units / calculations.totalUnits) : 0;
-                      const totalMargin = product.margin * product.units;
-
-                      return (
-                        <tr key={product.id} style={{backgroundColor: product.category === 'Classic' ? '#f8f9fa' : '#f0f7f5'}}>
-                          <td 
-                            style={{...styles.tableCell, position: 'relative'}}
-                            onMouseEnter={() => setHoveredCell(`product-${product.id}`)}
-                            onMouseLeave={() => setHoveredCell(null)}
+                    {startupCosts.map((cost) => (
+                      <tr key={cost.id}>
+                        <td style={styles.tableCell}>
+                          <input
+                            type="text"
+                            value={cost.category}
+                            onChange={(e) => updateStartupCost(cost.id, 'category', e.target.value)}
+                            style={styles.input}
+                          />
+                        </td>
+                        <td style={styles.tableCell}>
+                          <input
+                            type="text"
+                            value={cost.item}
+                            onChange={(e) => updateStartupCost(cost.id, 'item', e.target.value)}
+                            style={styles.input}
+                          />
+                        </td>
+                        <td style={styles.tableCell}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={cost.estimatedCost}
+                            onChange={(e) => updateStartupCost(cost.id, 'estimatedCost', parseFloat(e.target.value) || 0)}
+                            style={{...styles.inputSmall, width: '110px'}}
+                          />
+                        </td>
+                        <td style={styles.tableCell}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={cost.actualCost}
+                            onChange={(e) => updateStartupCost(cost.id, 'actualCost', parseFloat(e.target.value) || 0)}
+                            style={{...styles.inputSmall, width: '110px'}}
+                          />
+                        </td>
+                        <td style={{...styles.tableCell, textAlign: 'center'}}>
+                          <input
+                            type="checkbox"
+                            checked={cost.paid}
+                            onChange={(e) => updateStartupCost(cost.id, 'paid', e.target.checked)}
+                            style={{width: '20px', height: '20px', cursor: 'pointer'}}
+                          />
+                        </td>
+                        <td style={styles.tableCell}>
+                          <input
+                            type="text"
+                            value={cost.notes}
+                            onChange={(e) => updateStartupCost(cost.id, 'notes', e.target.value)}
+                            style={styles.input}
+                          />
+                        </td>
+                        <td style={styles.tableCell}>
+                          <button
+                            onClick={() => deleteStartupCost(cost.id)}
+                            style={styles.deleteButton}
                           >
-                            <input
-                              type="text"
-                              value={product.name}
-                              onChange={(e) => updateProduct(product.id, 'name', e.target.value)}
-                              style={{...styles.input, minWidth: '170px'}}
-                            />
-                            {hoveredCell === `product-${product.id}` && (
-                              <div style={styles.tooltip}>{product.name}</div>
-                            )}
-                          </td>
-                          <td 
-                            style={{...styles.tableCell, position: 'relative'}}
-                            onMouseEnter={() => setHoveredCell(`category-${product.id}`)}
-                            onMouseLeave={() => setHoveredCell(null)}
-                          >
-                            <select
-                              value={product.category}
-                              onChange={(e) => updateProduct(product.id, 'category', e.target.value as 'Classic' | 'Pitmaster')}
-                              style={{...styles.select, minWidth: '120px'}}
-                            >
-                              <option value="Classic">Classic</option>
-                              <option value="Pitmaster">Pitmaster</option>
-                            </select>
-                            {hoveredCell === `category-${product.id}` && (
-                              <div style={styles.tooltip}>{product.category}</div>
-                            )}
-                          </td>
-                          <td 
-                            style={{...styles.tableCell, position: 'relative'}}
-                            onMouseEnter={() => setHoveredCell(`meat-${product.id}`)}
-                            onMouseLeave={() => setHoveredCell(null)}
-                          >
-                            <select
-                              value={product.meatType}
-                              onChange={(e) => updateProduct(product.id, 'meatType', e.target.value as 'Beef' | 'Pork' | 'Poultry')}
-                              style={{...styles.select, minWidth: '110px'}}
-                            >
-                              <option value="Beef">Beef</option>
-                              <option value="Pork">Pork</option>
-                              <option value="Poultry">Poultry</option>
-                            </select>
-                            {hoveredCell === `meat-${product.id}` && (
-                              <div style={styles.tooltip}>{product.meatType}</div>
-                            )}
-                          </td>
-                          <td style={styles.tableCell}>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={product.weight}
-                              onChange={(e) => updateProduct(product.id, 'weight', parseFloat(e.target.value) || 0)}
-                              style={styles.inputSmall}
-                            />
-                          </td>
-                          <td style={styles.tableCell}>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={product.costPrice}
-                              onChange={(e) => updateProduct(product.id, 'costPrice', parseFloat(e.target.value) || 0)}
-                              style={styles.inputSmall}
-                            />
-                          </td>
-                          <td style={styles.tableCell}>
-                            <input
-                              type="number"
-                              step="1"
-                              value={product.wastePercentage}
-                              onChange={(e) => updateProduct(product.id, 'wastePercentage', parseFloat(e.target.value) || 0)}
-                              style={styles.inputSmall}
-                            />
-                          </td>
-                          <td style={styles.tableCell}>
-                            <input
-                              type="number"
-                              step="1"
-                              value={product.prepTimeMinutes}
-                              onChange={(e) => updateProduct(product.id, 'prepTimeMinutes', parseFloat(e.target.value) || 0)}
-                              style={styles.inputSmall}
-                            />
-                          </td>
-                          <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>
-                            €{totalCost.toFixed(2)}
-                          </td>
-                          <td style={styles.tableCell}>
-                            <input
-                              type="number"
-                              step="1"
-                              value={product.sellPrice}
-                              onChange={(e) => updateProduct(product.id, 'sellPrice', parseFloat(e.target.value) || 0)}
-                              style={styles.inputSmall}
-                            />
-                          </td>
-                          <td style={{...styles.tableCell, textAlign: 'right', color: product.margin >= 0 ? '#587C74' : '#BB463C', fontWeight: 'bold'}}>
-                            €{product.margin.toFixed(2)}
-                          </td>
-                          <td style={{...styles.tableCell, textAlign: 'right', color: euroPerMin >= 5 ? '#587C74' : euroPerMin >= 3 ? '#F2CC8F' : '#BB463C'}}>
-                            €{euroPerMin.toFixed(2)}
-                          </td>
-                          <td style={styles.tableCell}>
-                            <input
-                              type="number"
-                              step="1"
-                              value={product.units}
-                              onChange={(e) => updateProduct(product.id, 'units', parseInt(e.target.value) || 0)}
-                              style={styles.inputSmall}
-                            />
-                          </td>
-                          <td style={{...styles.tableCell, textAlign: 'right'}}>
-                            {keesUnits.toFixed(0)}
-                          </td>
-                          <td style={{...styles.tableCell, textAlign: 'right', color: totalMargin >= 0 ? '#587C74' : '#BB463C', fontWeight: 'bold'}}>
-                            €{totalMargin.toFixed(2)}
-                          </td>
-                          <td style={styles.tableCell}>
-                            <button
-                              onClick={() => deleteProduct(product.id)}
-                              style={styles.deleteButton}
-                            >
-                              ✕
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                   <tfoot>
                     <tr style={{backgroundColor: '#f5f5f5', fontWeight: 'bold'}}>
-                      <td colSpan={7} style={{...styles.tableCell, textAlign: 'right'}}>
-                        {categoryFilter !== 'all' ? `${categoryFilter} TOTALS:` : 'ALL TOTALS:'}
-                      </td>
-                      <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>
-                        €{filteredProducts.reduce((sum, p) => {
-                          const trueCost = p.costPrice / (1 - p.wastePercentage / 100);
-                          return sum + (trueCost * p.weight * p.units);
-                        }, 0).toFixed(2)}
-                      </td>
-                      <td style={{...styles.tableCell, textAlign: 'right', color: '#587C74'}}>
-                        €{filteredProducts.reduce((sum, p) => sum + (p.sellPrice * p.units), 0).toFixed(2)}
-                      </td>
-                      <td style={{...styles.tableCell, textAlign: 'right', color: '#587C74'}}>
-                        €{filteredProducts.reduce((sum, p) => sum + (p.margin * p.units), 0).toFixed(2)}
-                      </td>
-                      <td style={styles.tableCell}></td>
+                      <td colSpan={2} style={{...styles.tableCell, textAlign: 'right'}}>TOTALS:</td>
                       <td style={{...styles.tableCell, textAlign: 'right'}}>
-                        {filteredProducts.reduce((sum, p) => sum + p.units, 0)}
+                        €{startupCosts.reduce((sum, c) => sum + c.estimatedCost, 0).toFixed(2)}
                       </td>
-                      <td style={styles.tableCell}></td>
-                      <td style={{...styles.tableCell, textAlign: 'right', color: '#587C74'}}>
-                        €{filteredProducts.reduce((sum, p) => sum + (p.margin * p.units), 0).toFixed(2)}
+                      <td style={{...styles.tableCell, textAlign: 'right', color: '#2F3E46'}}>
+                        €{totalStartupCosts.toFixed(2)}
                       </td>
-                      <td style={styles.tableCell}></td>
+                      <td colSpan={3} style={styles.tableCell}></td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
-            </div>
-          </>
-        )}
 
-        {activeTab === 'startup' && (
-          <div style={styles.card}>
-            <div style={styles.cardHeader}>
-              <div>
-                <h2 style={styles.cardTitle}>Startup Investment Required</h2>
-                <p style={{fontSize: '28px', fontWeight: 'bold', color: '#2F3E46', marginTop: '8px'}}>
-                  Total: €{totalStartupCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                </p>
-                <div style={{marginTop: '8px', display: 'flex', alignItems: 'center', gap: '16px'}}>
-                  <span style={{
-                    ...styles.statusBadge,
-                    backgroundColor: '#e8f4f1',
-                    color: '#587C74'
-                  }}>
-                    Paid: €{totalPaid.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                  </span>
-                  <span style={{
-                    ...styles.statusBadge,
-                    backgroundColor: '#ffe5e5',
-                    color: '#BB463C'
-                  }}>
-                    Remaining: €{(totalStartupCost - totalPaid).toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                  </span>
+              <div style={styles.gridTwo}>
+                <div style={{
+                  ...styles.infoBox,
+                  backgroundColor: '#e8f4f1',
+                  borderLeft: '4px solid #587C74'
+                }}>
+                  <h3 style={{fontWeight: 'bold', color: '#587C74', marginBottom: '8px', fontSize: '16px'}}>Paid Costs</h3>
+                  <p style={{fontSize: '24px', fontWeight: 'bold', color: '#587C74', margin: 0}}>
+                    €{paidStartupCosts.toFixed(2)}
+                  </p>
+                  <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
+                    {startupCosts.filter(c => c.paid).length} items completed
+                  </p>
+                </div>
+                <div style={{
+                  ...styles.infoBox,
+                  backgroundColor: '#ffe5e5',
+                  borderLeft: '4px solid #BB463C'
+                }}>
+                  <h3 style={{fontWeight: 'bold', color: '#BB463C', marginBottom: '8px', fontSize: '16px'}}>Unpaid Costs</h3>
+                  <p style={{fontSize: '24px', fontWeight: 'bold', color: '#BB463C', margin: 0}}>
+                    €{unpaidStartupCosts.toFixed(2)}
+                  </p>
+                  <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
+                    {startupCosts.filter(c => !c.paid).length} items pending
+                  </p>
                 </div>
               </div>
-              <button
-                onClick={addStartupCost}
-                onMouseEnter={() => setHoveredButton('add-startup')}
-                onMouseLeave={() => setHoveredButton(null)}
-                style={{
-                  ...styles.button,
-                  ...(hoveredButton === 'add-startup' ? styles.buttonHover : {})
-                }}
-              >
-                + Add Cost
-              </button>
-            </div>
-            <div style={styles.progressBar}>
-              <div style={{
-                width: `${(totalPaid / totalStartupCost) * 100}%`,
-                height: '100%',
-                backgroundColor: '#587C74',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontSize: '12px',
-                fontWeight: 'bold',
-                transition: 'width 0.3s ease'
-              }}>
-                {((totalPaid / totalStartupCost) * 100).toFixed(0)}%
-              </div>
-            </div>
-            <div style={{overflowX: 'auto', marginTop: '24px'}}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={{...styles.tableHeader, textAlign: 'left'}}>Category</th>
-                    <th style={{...styles.tableHeader, textAlign: 'left'}}>Item</th>
-                    <th style={{...styles.tableHeader, textAlign: 'right'}}>Estimated (€)</th>
-                    <th style={{...styles.tableHeader, textAlign: 'right'}}>Actual (€)</th>
-                    <th style={{...styles.tableHeader, textAlign: 'center'}}>Status</th>
-                    <th style={{...styles.tableHeader, textAlign: 'left'}}>Notes</th>
-                    <th style={styles.tableHeader}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {startupCosts.map((cost) => (
-                    <tr key={cost.id}>
-                      <td style={styles.tableCell}>
-                        <input
-                          type="text"
-                          value={cost.category}
-                          onChange={(e) => updateStartupCost(cost.id, 'category', e.target.value)}
-                          style={styles.input}
-                        />
-                      </td>
-                      <td style={styles.tableCell}>
-                        <input
-                          type="text"
-                          value={cost.item}
-                          onChange={(e) => updateStartupCost(cost.id, 'item', e.target.value)}
-                          style={styles.input}
-                        />
-                      </td>
-                      <td style={styles.tableCell}>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={cost.estimatedCost}
-                          onChange={(e) => updateStartupCost(cost.id, 'estimatedCost', parseFloat(e.target.value) || 0)}
-                          style={{...styles.inputSmall, width: '110px'}}
-                        />
-                      </td>
-                      <td style={styles.tableCell}>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={cost.actualCost}
-                          onChange={(e) => updateStartupCost(cost.id, 'actualCost', parseFloat(e.target.value) || 0)}
-                          style={{...styles.inputSmall, width: '110px'}}
-                        />
-                      </td>
-                      <td style={{...styles.tableCell, textAlign: 'center'}}>
-                        <input
-                          type="checkbox"
-                          checked={cost.paid}
-                          onChange={(e) => updateStartupCost(cost.id, 'paid', e.target.checked)}
-                          style={{width: '20px', height: '20px', cursor: 'pointer'}}
-                        />
-                      </td>
-                      <td style={styles.tableCell}>
-                        <input
-                          type="text"
-                          value={cost.notes}
-                          onChange={(e) => updateStartupCost(cost.id, 'notes', e.target.value)}
-                          style={styles.input}
-                        />
-                      </td>
-                      <td style={styles.tableCell}>
-                        <button
-                          onClick={() => deleteStartupCost(cost.id)}
-                          style={styles.deleteButton}
-                        >
-                          ✕
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{backgroundColor: '#f5f5f5', fontWeight: 'bold'}}>
-                    <td colSpan={2} style={{...styles.tableCell, textAlign: 'right'}}>TOTALS:</td>
-                    <td style={{...styles.tableCell, textAlign: 'right'}}>
-                      €{startupCosts.reduce((sum, c) => sum + c.estimatedCost, 0).toFixed(2)}
-                    </td>
-                    <td style={{...styles.tableCell, textAlign: 'right', color: '#2F3E46'}}>
-                      €{totalStartupCost.toFixed(2)}
-                    </td>
-                    <td colSpan={3} style={styles.tableCell}></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            <div style={{
-              ...styles.infoBox,
-              backgroundColor: '#e8f4f1',
-              borderLeft: '4px solid #587C74'
-            }}>
-              <h3 style={{color: '#2F3E46', fontSize: '16px', fontWeight: 'bold', marginBottom: '8px'}}>
-                💰 Working Capital Breakdown
-              </h3>
-              <ul style={{color: '#282828', fontSize: '14px', margin: 0, paddingLeft: '20px'}}>
-                <li><strong>Initial Inventory (€8,000):</strong> First month's meat stock to fill display cases</li>
-                <li><strong>Cash Reserve (€14,040):</strong> 2 months of fixed costs as safety buffer</li>
-                <li><strong>Emergency Fund (€5,000):</strong> Unexpected repairs, equipment failures, etc.</li>
-              </ul>
-              <p style={{color: '#282828', fontSize: '14px', marginTop: '12px', marginBottom: 0}}>
-                <strong>Why this matters:</strong> You need cash on hand before sales start coming in. 
-                This ensures you can pay suppliers, rent, and staff while building your customer base.
-              </p>
             </div>
           </div>
         )}
 
         {activeTab === 'monthly' && (
-          <div style={styles.card}>
-            <div style={styles.cardHeader}>
-              <div>
-                <h2 style={styles.cardTitle}>Monthly Recurring Costs</h2>
-                <p style={{fontSize: '28px', fontWeight: 'bold', color: '#BB463C', marginTop: '8px'}}>
-                  Total Operating: €{totalMonthlyOpex.toLocaleString('nl-NL', {minimumFractionDigits: 2})}/month
-                </p>
-                <p style={{fontSize: '16px', color: '#282828'}}>
-                  Annual: €{(totalMonthlyOpex * 12).toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                </p>
+          <div>
+            <div data-section style={styles.card}>
+              <div style={styles.cardHeader}>
+                <div>
+                  <h2 style={styles.cardTitle}>Monthly Recurring Costs</h2>
+                  <p style={{fontSize: '28px', fontWeight: 'bold', color: '#BB463C', marginTop: '8px'}}>
+                    Total Operating: €{totalMonthlyOpex.toLocaleString('nl-NL', {minimumFractionDigits: 2})}/month
+                  </p>
+                  <p style={{fontSize: '16px', color: '#282828'}}>
+                    Annual: €{(totalMonthlyOpex * 12).toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                  </p>
+                </div>
+                <button
+                  onClick={addMonthlyCost}
+                  onMouseEnter={() => setHoveredButton('add-monthly')}
+                  onMouseLeave={() => setHoveredButton(null)}
+                  style={{
+                    ...styles.button,
+                    ...(hoveredButton === 'add-monthly' ? styles.buttonHover : {})
+                  }}
+                >
+                  + Add Cost
+                </button>
               </div>
-              <button
-                onClick={addMonthlyCost}
-                onMouseEnter={() => setHoveredButton('add-monthly')}
-                onMouseLeave={() => setHoveredButton(null)}
-                style={{
-                  ...styles.button,
-                  ...(hoveredButton === 'add-monthly' ? styles.buttonHover : {})
-                }}
-              >
-                + Add Cost
-              </button>
-            </div>
-            <div style={{overflowX: 'auto'}}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={{...styles.tableHeader, textAlign: 'left'}}>Category</th>
-                    <th style={{...styles.tableHeader, textAlign: 'left'}}>Item</th>
-                    <th style={{...styles.tableHeader, textAlign: 'right'}}>Monthly (€)</th>
-                    <th style={{...styles.tableHeader, textAlign: 'right'}}>Annual (€)</th>
-                    <th style={{...styles.tableHeader, textAlign: 'center'}}>Type</th>
-                    <th style={{...styles.tableHeader, textAlign: 'left'}}>Notes</th>
-                    <th style={styles.tableHeader}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyCosts.map((cost) => (
-                    <tr key={cost.id}>
-                      <td style={styles.tableCell}>
-                        <input
-                          type="text"
-                          value={cost.category}
-                          onChange={(e) => updateMonthlyCost(cost.id, 'category', e.target.value)}
-                          style={styles.input}
-                        />
-                      </td>
-                      <td style={styles.tableCell}>
-                        <input
-                          type="text"
-                          value={cost.item}
-                          onChange={(e) => updateMonthlyCost(cost.id, 'item', e.target.value)}
-                          style={styles.input}
-                        />
-                      </td>
-                      <td style={styles.tableCell}>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={cost.monthlyCost}
-                          onChange={(e) => updateMonthlyCost(cost.id, 'monthlyCost', parseFloat(e.target.value) || 0)}
-                          style={{...styles.inputSmall, width: '110px'}}
-                        />
-                      </td>
-                      <td style={{...styles.tableCell, textAlign: 'right'}}>€{cost.annualCost.toFixed(2)}</td>
-                      <td style={styles.tableCell}>
-                        <select
-                          value={cost.type}
-                          onChange={(e) => updateMonthlyCost(cost.id, 'type', e.target.value)}
-                          style={styles.select}
-                        >
-                          <option>Fixed</option>
-                          <option>Variable</option>
-                        </select>
-                      </td>
-                      <td style={styles.tableCell}>
-                        <input
-                          type="text"
-                          value={cost.notes}
-                          onChange={(e) => updateMonthlyCost(cost.id, 'notes', e.target.value)}
-                          style={styles.input}
-                        />
-                      </td>
-                      <td style={styles.tableCell}>
-                        <button
-                          onClick={() => deleteMonthlyCost(cost.id)}
-                          style={styles.deleteButton}
-                        >
-                          ✕
-                        </button>
-                      </td>
+              <div style={{overflowX: 'auto'}}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={{...styles.tableHeader, textAlign: 'left'}}>Category</th>
+                      <th style={{...styles.tableHeader, textAlign: 'left'}}>Item</th>
+                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Monthly (€)</th>
+                      <th style={{...styles.tableHeader, textAlign: 'right'}}>Annual (€)</th>
+                      <th style={{...styles.tableHeader, textAlign: 'center'}}>Type</th>
+                      <th style={{...styles.tableHeader, textAlign: 'left'}}>Notes</th>
+                      <th style={styles.tableHeader}></th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{backgroundColor: '#f5f5f5', fontWeight: 'bold'}}>
-                    <td colSpan={2} style={{...styles.tableCell, textAlign: 'right'}}>TOTALS:</td>
-                    <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>
-                      €{totalMonthlyOpex.toFixed(2)}
-                    </td>
-                    <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>
-                      €{(totalMonthlyOpex * 12).toFixed(2)}
-                    </td>
-                    <td colSpan={3} style={styles.tableCell}></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            <div style={styles.gridTwo}>
-              <div style={{
-                ...styles.infoBox,
-                backgroundColor: '#e8f0f4',
-                borderLeft: '4px solid #2F3E46'
-              }}>
-                <h3 style={{fontWeight: 'bold', color: '#2F3E46', marginBottom: '8px', fontSize: '16px'}}>Fixed Costs</h3>
-                <p style={{fontSize: '24px', fontWeight: 'bold', color: '#2F3E46', margin: 0}}>
-                  €{monthlyCosts.filter(c => c.type === 'Fixed').reduce((sum, c) => sum + c.monthlyCost, 0).toFixed(2)}
-                </p>
-                <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
-                  {monthlyCosts.filter(c => c.type === 'Fixed').length} items - Must pay regardless of sales
-                </p>
+                  </thead>
+                  <tbody>
+                    {monthlyCosts.map((cost) => (
+                      <tr key={cost.id}>
+                        <td style={styles.tableCell}>
+                          <input
+                            type="text"
+                            value={cost.category}
+                            onChange={(e) => updateMonthlyCost(cost.id, 'category', e.target.value)}
+                            style={styles.input}
+                          />
+                        </td>
+                        <td style={styles.tableCell}>
+                          <input
+                            type="text"
+                            value={cost.item}
+                            onChange={(e) => updateMonthlyCost(cost.id, 'item', e.target.value)}
+                            style={styles.input}
+                          />
+                        </td>
+                        <td style={styles.tableCell}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={cost.monthlyCost}
+                            onChange={(e) => updateMonthlyCost(cost.id, 'monthlyCost', parseFloat(e.target.value) || 0)}
+                            style={{...styles.inputSmall, width: '110px'}}
+                          />
+                        </td>
+                        <td style={{...styles.tableCell, textAlign: 'right'}}>€{cost.annualCost.toFixed(2)}</td>
+                        <td style={styles.tableCell}>
+                          <select
+                            value={cost.type}
+                            onChange={(e) => updateMonthlyCost(cost.id, 'type', e.target.value)}
+                            style={styles.select}
+                          >
+                            <option>Fixed</option>
+                            <option>Variable</option>
+                          </select>
+                        </td>
+                        <td style={styles.tableCell}>
+                          <input
+                            type="text"
+                            value={cost.notes}
+                            onChange={(e) => updateMonthlyCost(cost.id, 'notes', e.target.value)}
+                            style={styles.input}
+                          />
+                        </td>
+                        <td style={styles.tableCell}>
+                          <button
+                            onClick={() => deleteMonthlyCost(cost.id)}
+                            style={styles.deleteButton}
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{backgroundColor: '#f5f5f5', fontWeight: 'bold'}}>
+                      <td colSpan={2} style={{...styles.tableCell, textAlign: 'right'}}>TOTALS:</td>
+                      <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>
+                        €{totalMonthlyOpex.toFixed(2)}
+                      </td>
+                      <td style={{...styles.tableCell, textAlign: 'right', color: '#BB463C'}}>
+                        €{(totalMonthlyOpex * 12).toFixed(2)}
+                      </td>
+                      <td colSpan={3} style={styles.tableCell}></td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
-              <div style={{
-                ...styles.infoBox,
-                backgroundColor: '#e8f4f1',
-                borderLeft: '4px solid #587C74'
-              }}>
-                <h3 style={{fontWeight: 'bold', color: '#587C74', marginBottom: '8px', fontSize: '16px'}}>Variable Costs</h3>
-                <p style={{fontSize: '24px', fontWeight: 'bold', color: '#587C74', margin: 0}}>
-                  €{monthlyCosts.filter(c => c.type === 'Variable').reduce((sum, c) => sum + c.monthlyCost, 0).toFixed(2)}
-                </p>
-                <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
-                  {monthlyCosts.filter(c => c.type === 'Variable').length} items - Scale with business activity
-                </p>
-              </div>
-            </div>
 
-            {/* Classic vs Pitmaster COGS Breakdown */}
-            <div style={{...styles.sectionDivider}}>
-              <h3 style={{fontSize: '18px', fontWeight: 'bold', color: '#2F3E46', marginBottom: '16px'}}>
-                Cost of Goods Sold (COGS) by Category
-              </h3>
               <div style={styles.gridTwo}>
                 <div style={{
                   ...styles.infoBox,
-                  backgroundColor: '#ffe5e5',
-                  borderLeft: '4px solid #BB463C',
-                  margin: 0
+                  backgroundColor: '#e8f0f4',
+                  borderLeft: '4px solid #2F3E46'
                 }}>
-                  <h3 style={{fontWeight: 'bold', color: '#2F3E46', marginBottom: '8px', fontSize: '16px'}}>Classic COGS</h3>
-                  <p style={{fontSize: '24px', fontWeight: 'bold', color: '#BB463C', margin: 0}}>
-                    €{calculations.classicCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                  <h3 style={{fontWeight: 'bold', color: '#2F3E46', marginBottom: '8px', fontSize: '16px'}}>Fixed Costs</h3>
+                  <p style={{fontSize: '24px', fontWeight: 'bold', color: '#2F3E46', margin: 0}}>
+                    €{monthlyCosts.filter(c => c.type === 'Fixed').reduce((sum, c) => sum + c.monthlyCost, 0).toFixed(2)}
                   </p>
                   <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
-                    {calculations.classicUnits} units - {((calculations.classicCost / calculations.totalCost) * 100).toFixed(1)}% of total COGS
+                    {monthlyCosts.filter(c => c.type === 'Fixed').length} items - Must pay regardless of sales
                   </p>
                 </div>
                 <div style={{
                   ...styles.infoBox,
-                  backgroundColor: '#ffe5e5',
-                  borderLeft: '4px solid #BB463C',
-                  margin: 0
+                  backgroundColor: '#e8f4f1',
+                  borderLeft: '4px solid #587C74'
                 }}>
-                  <h3 style={{fontWeight: 'bold', color: '#587C74', marginBottom: '8px', fontSize: '16px'}}>Pitmaster COGS</h3>
-                  <p style={{fontSize: '24px', fontWeight: 'bold', color: '#BB463C', margin: 0}}>
-                    €{calculations.pitmasterCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                  <h3 style={{fontWeight: 'bold', color: '#587C74', marginBottom: '8px', fontSize: '16px'}}>Variable Costs</h3>
+                  <p style={{fontSize: '24px', fontWeight: 'bold', color: '#587C74', margin: 0}}>
+                    €{monthlyCosts.filter(c => c.type === 'Variable').reduce((sum, c) => sum + c.monthlyCost, 0).toFixed(2)}
                   </p>
                   <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
-                    {calculations.pitmasterUnits} units - {((calculations.pitmasterCost / calculations.totalCost) * 100).toFixed(1)}% of total COGS
+                    {monthlyCosts.filter(c => c.type === 'Variable').length} items - Scale with business activity
                   </p>
                 </div>
               </div>
-            </div>
 
-            <div style={{...styles.gridTwo, marginTop: '16px'}}>
+              {/* Classic vs Pitmaster COGS Breakdown */}
+              <div style={{...styles.sectionDivider}}>
+                <h3 style={{fontSize: '18px', fontWeight: 'bold', color: '#2F3E46', marginBottom: '16px'}}>
+                  Cost of Goods Sold (COGS) by Category
+                </h3>
+                <div style={styles.gridTwo}>
+                  <div style={{
+                    ...styles.infoBox,
+                    backgroundColor: '#ffe5e5',
+                    borderLeft: '4px solid #BB463C',
+                    margin: 0
+                  }}>
+                    <h3 style={{fontWeight: 'bold', color: '#2F3E46', marginBottom: '8px', fontSize: '16px'}}>Classic COGS</h3>
+                    <p style={{fontSize: '24px', fontWeight: 'bold', color: '#BB463C', margin: 0}}>
+                      €{calculations.classicCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                    </p>
+                    <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
+                      {calculations.classicUnits} units - {((calculations.classicCost / calculations.totalCost) * 100).toFixed(1)}% of total COGS
+                    </p>
+                  </div>
+                  <div style={{
+                    ...styles.infoBox,
+                    backgroundColor: '#ffe5e5',
+                    borderLeft: '4px solid #BB463C',
+                    margin: 0
+                  }}>
+                    <h3 style={{fontWeight: 'bold', color: '#587C74', marginBottom: '8px', fontSize: '16px'}}>Pitmaster COGS</h3>
+                    <p style={{fontSize: '24px', fontWeight: 'bold', color: '#BB463C', margin: 0}}>
+                      €{calculations.pitmasterCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                    </p>
+                    <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
+                      {calculations.pitmasterUnits} units - {((calculations.pitmasterCost / calculations.totalCost) * 100).toFixed(1)}% of total COGS
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{...styles.gridTwo, marginTop: '16px'}}>
+                <div style={{
+                  ...styles.infoBox,
+                  backgroundColor: '#ffe5e5',
+                  borderLeft: '4px solid #BB463C'
+                }}>
+                  <h3 style={{fontWeight: 'bold', color: '#BB463C', marginBottom: '8px', fontSize: '16px'}}>Total COGS</h3>
+                  <p style={{fontSize: '24px', fontWeight: 'bold', color: '#BB463C', margin: 0}}>
+                    €{calculations.totalCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                  </p>
+                  <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
+                    Calculated from product sales volume (includes waste)
+                  </p>
+                </div>
+                <div style={{
+                  ...styles.infoBox,
+                  backgroundColor: '#e8f0f4',
+                  borderLeft: '4px solid #2F3E46'
+                }}>
+                  <h3 style={{fontWeight: 'bold', color: '#2F3E46', marginBottom: '8px', fontSize: '16px'}}>Total Operating Expenses</h3>
+                  <p style={{fontSize: '24px', fontWeight: 'bold', color: '#2F3E46', margin: 0}}>
+                    €{totalOperatingExpenses.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
+                  </p>
+                  <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
+                    Monthly Opex (€{totalMonthlyOpex.toFixed(2)}) + COGS (€{calculations.totalCost.toFixed(2)})
+                  </p>
+                </div>
+              </div>
+              
               <div style={{
                 ...styles.infoBox,
-                backgroundColor: '#ffe5e5',
-                borderLeft: '4px solid #BB463C'
+                backgroundColor: '#fff3cd',
+                borderLeft: '4px solid #BB463C',
+                marginTop: '16px'
               }}>
-                <h3 style={{fontWeight: 'bold', color: '#BB463C', marginBottom: '8px', fontSize: '16px'}}>Total COGS</h3>
-                <p style={{fontSize: '24px', fontWeight: 'bold', color: '#BB463C', margin: 0}}>
-                  €{calculations.totalCost.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                </p>
-                <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
-                  Calculated from product sales volume (includes waste)
+                <p style={{color: '#282828', margin: 0, fontSize: '14px'}}>
+                  <strong>📦 Note:</strong> Total Operating Expenses includes both fixed costs (rent, labor, insurance) 
+                  and variable costs (COGS, packaging, cleaning supplies).
                 </p>
               </div>
-              <div style={{
-                ...styles.infoBox,
-                backgroundColor: '#e8f0f4',
-                borderLeft: '4px solid #2F3E46'
-              }}>
-                <h3 style={{fontWeight: 'bold', color: '#2F3E46', marginBottom: '8px', fontSize: '16px'}}>Total Operating Expenses</h3>
-                <p style={{fontSize: '24px', fontWeight: 'bold', color: '#2F3E46', margin: 0}}>
-                  €{totalOperatingExpenses.toLocaleString('nl-NL', {minimumFractionDigits: 2})}
-                </p>
-                <p style={{fontSize: '14px', color: '#282828', marginTop: '4px'}}>
-                  Monthly Opex (€{totalMonthlyOpex.toFixed(2)}) + COGS (€{calculations.totalCost.toFixed(2)})
-                </p>
-              </div>
-            </div>
-            
-            <div style={{
-              ...styles.infoBox,
-              backgroundColor: '#fff3cd',
-              borderLeft: '4px solid #BB463C',
-              marginTop: '16px'
-            }}>
-              <p style={{color: '#282828', margin: 0, fontSize: '14px'}}>
-                <strong>📦 Note:</strong> Total Operating Expenses includes both fixed costs (rent, labor, insurance) 
-                and variable costs (COGS, packaging, cleaning supplies).
-              </p>
             </div>
           </div>
         )}
